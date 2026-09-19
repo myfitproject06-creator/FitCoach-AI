@@ -7,6 +7,7 @@ import {
   FitnessStatus,
   WeeklyReportData,
   LineMessage,
+  CoachAccountabilityState,
 } from "../types";
 
 export const initialProfile: UserProfile = {
@@ -277,3 +278,14 @@ export const weeklyScheduleDays = [
   { day: "SAT", label: "เสาร์", title: "Legs & Athletic Conditioning", duration: "45 นาที", completed: false, type: "train" },
   { day: "SUN", label: "อาทิตย์", title: "Full Rest & Weekly Review", duration: "พักผ่อน", completed: false, type: "rest" },
 ];
+
+export const initialAccountability: CoachAccountabilityState = {
+  scheduledTime: "18:00",
+  status: "on_track",
+  strikes: 0,
+  penaltyActive: false,
+  penaltyTask: "Burpees 15 ครั้ง หรือ Push-ups 25 ครั้ง เพื่อปลดล็อคบทลงโทษ",
+  lastReminderType: "pre_workout",
+  lastReminderText: "วันนี้เรามีซ้อมตอน 18:00 น. นะครับ เตรียมพร้อมหรือยัง?",
+};
+

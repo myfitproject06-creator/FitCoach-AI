@@ -11,6 +11,10 @@ import {
   Flame,
   ArrowRight,
   SlidersHorizontal,
+  AlertTriangle,
+  Shield,
+  Bell,
+  Zap,
 } from "lucide-react";
 import {
   WorkoutPlan,
@@ -20,6 +24,7 @@ import {
   FitnessStatus,
   UserProfile,
   Plan3MonthsData,
+  CoachAccountabilityState,
 } from "../types";
 
 interface HomeViewProps {
@@ -30,12 +35,16 @@ interface HomeViewProps {
   status: FitnessStatus;
   profile: UserProfile;
   activePlan3Months?: Plan3MonthsData | null;
+  accountability?: CoachAccountabilityState;
   onOpenPlan3Months?: () => void;
   onOpenWorkout: () => void;
   onOpenNutrition: () => void;
   onOpenRecovery: () => void;
   onOpenAdapt: () => void;
   onOpenLine: () => void;
+  onTriggerCoachScenario?: (scenario: "18_00" | "overdue" | "penalty" | "meal_prompt") => void;
+  onClearPenalty?: () => void;
+  onOpenRichMenuStudio?: () => void;
 }
 
 export const HomeView: React.FC<HomeViewProps> = ({
@@ -46,12 +55,16 @@ export const HomeView: React.FC<HomeViewProps> = ({
   status,
   profile,
   activePlan3Months,
+  accountability,
   onOpenPlan3Months,
   onOpenWorkout,
   onOpenNutrition,
   onOpenRecovery,
   onOpenAdapt,
   onOpenLine,
+  onTriggerCoachScenario,
+  onClearPenalty,
+  onOpenRichMenuStudio,
 }) => {
   // Calculate completed daily tasks
   const tasks = [
@@ -128,6 +141,158 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Coach Accountability & Proactive Tracking Card */}
+      <div
+        className={`rounded-2xl p-4 shadow-md border transition-all ${
+          accountability?.penaltyActive
+            ? "bg-gradient-to-r from-rose-950 via-slate-900 to-rose-950 border-rose-500/50 text-white"
+            : accountability?.status === "overdue"
+            ? "bg-gradient-to-r from-amber-950 via-slate-900 to-amber-950 border-amber-500/50 text-white"
+            : "bg-gradient-to-r from-slate-900 via-slate-800 to-teal-950 border-emerald-500/30 text-white"
+        }`}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span
+              className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+                accountability?.penaltyActive
+                  ? "bg-rose-500/20 text-rose-300 border border-rose-500/40"
+                  : accountability?.status === "overdue"
+                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                  : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+              }`}
+            >
+              {accountability?.penaltyActive ? "🚨" : accountability?.status === "overdue" ? "⚠️" : "🛡️"}
+            </span>
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300 block">
+                FITCOACH DISCIPLINE & ACCOUNTABILITY
+              </span>
+              <h3 className="text-xs font-bold text-white">
+                {accountability?.penaltyActive
+                  ? `บทลงโทษทางวินัย (Strike ${accountability?.strikes || 3}/3)`
+                  : accountability?.status === "overdue"
+                  ? "เลยเวลานัดซ้อมแล้ว! โค้ชกำลังติดตาม"
+                  : `มีนัดซ้อมเวลา ${accountability?.scheduledTime || "18:00"} น. (ตรงเวลา)`}
+              </h3>
+            </div>
+          </div>
+
+          <span
+            className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold border ${
+              accountability?.penaltyActive
+                ? "bg-rose-500/20 text-rose-300 border border-rose-500/40"
+                : accountability?.status === "overdue"
+                ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse"
+                : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+            }`}
+          >
+            {accountability?.penaltyActive
+              ? "Penalty Active"
+              : accountability?.status === "overdue"
+              ? "Overdue Alert"
+              : "On Schedule"}
+          </span>
+        </div>
+
+        {/* Message / context */}
+        <p className="text-xs text-slate-200 mt-2 leading-relaxed">
+          {accountability?.penaltyActive ? (
+            <span>
+              🚨 คุณขาดการเข้าซ้อมตามโปรแกรมที่กำหนด! โค้ชออกบทลงโทษชดเชย:{" "}
+              <strong className="text-rose-300">
+                {accountability.penaltyTask || "Burpees 15 ครั้ง หรือ Push-ups 25 ครั้ง"}
+              </strong>
+            </span>
+          ) : accountability?.status === "overdue" ? (
+            <span>
+              ⏰ เลยเวลา 18:00 น. มาแล้ว โค้ชจะส่งข้อความเตือนคุณเรื่อยๆ จนกว่าจะเริ่มซ้อม
+              หรือลงโทษหากขาดซ้อมครับ!
+            </span>
+          ) : (
+            <span>
+              วันนี้มีซ้อม <strong>{workout.titleTh || workout.title}</strong> ตอน 18:00 น.
+              และส่งเมนูอาหารมาให้โค้ชคำนวณบันทึกในแอปได้ตลอดวันครับ
+            </span>
+          )}
+        </p>
+
+        {/* Actions & Scenario Simulation Bar */}
+        <div className="mt-3 pt-2.5 border-t border-slate-700/60 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5">
+            {accountability?.penaltyActive && onClearPenalty ? (
+              <button
+                onClick={onClearPenalty}
+                className="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-[11px] font-bold transition-all shadow-xs flex items-center gap-1"
+              >
+                <span>ส่งการบ้านชดเชย</span>
+              </button>
+            ) : (
+              <button
+                onClick={onOpenWorkout}
+                className="px-3 py-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl text-[11px] font-bold transition-all shadow-xs flex items-center gap-1"
+              >
+                <Dumbbell className="w-3 h-3" />
+                <span>เริ่มซ้อมทันที</span>
+              </button>
+            )}
+
+            <button
+              onClick={onOpenLine}
+              className="px-2.5 py-1 bg-[#06C755] hover:bg-[#05b34c] text-white rounded-xl text-[11px] font-bold transition-colors flex items-center gap-1 shadow-xs"
+            >
+              <span>เปิด LINE แชท</span>
+              <ArrowRight className="w-3 h-3 text-white" />
+            </button>
+
+            {onOpenRichMenuStudio && (
+              <button
+                onClick={onOpenRichMenuStudio}
+                className="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-emerald-300 hover:text-white rounded-xl text-[11px] font-semibold transition-colors flex items-center gap-1 border border-white/10"
+                title="เปิดเครื่องมือออกแบบและดาวน์โหลด LINE Rich Menu (2500x1686)"
+              >
+                <span>🎨 ออกแบบ Rich Menu</span>
+              </button>
+            )}
+          </div>
+
+          {/* Interactive Proactive Coach Scenario Triggers */}
+          {onTriggerCoachScenario && (
+            <div className="flex items-center gap-1 overflow-x-auto text-[10px]">
+              <span className="text-slate-400 mr-0.5 text-[9px]">จำลองสถานการณ์:</span>
+              <button
+                onClick={() => onTriggerCoachScenario("18_00")}
+                className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-emerald-300 rounded-lg border border-slate-700 transition-colors whitespace-nowrap"
+                title="จำลองถึงเวลานัดซ้อม 18:00 น."
+              >
+                🕒 18:00 น.
+              </button>
+              <button
+                onClick={() => onTriggerCoachScenario("overdue")}
+                className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-lg border border-slate-700 transition-colors whitespace-nowrap"
+                title="จำลองเลยเวลาซ้อม โค้ชตามจิก"
+              >
+                ⚠️ ตามซ้อม
+              </button>
+              <button
+                onClick={() => onTriggerCoachScenario("penalty")}
+                className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-rose-300 rounded-lg border border-slate-700 transition-colors whitespace-nowrap"
+                title="จำลองโดดซ้อม เริ่มบทลงโทษ"
+              >
+                🚨 สั่งลงโทษ
+              </button>
+              <button
+                onClick={() => onTriggerCoachScenario("meal_prompt")}
+                className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-teal-300 rounded-lg border border-slate-700 transition-colors whitespace-nowrap"
+                title="โค้ชทวงถามเมนูอาหารประจำวัน"
+              >
+                🥗 ทวงอาหาร
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* AI Coach Daily Guidance Box */}
       <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white rounded-2xl p-4 shadow-md relative overflow-hidden">

@@ -91,6 +91,7 @@ export interface FitnessStatus {
   trainingMomentum: number; // 88%
   momentumDays: number;     // 8 days streak
   programAdherence: number; // 93%
+  disciplineScore?: number; // 0 - 100%
 }
 
 export interface UserProfile {
@@ -148,23 +149,35 @@ export interface Plan3MonthsData {
   recoveryRules: string[];
 }
 
+export interface CoachAccountabilityState {
+  scheduledTime: string; // e.g. "18:00"
+  status: "on_track" | "approaching" | "workout_time" | "overdue" | "missed_penalty";
+  strikes: number; // 0-3
+  penaltyActive: boolean;
+  penaltyTask?: string;
+  lastReminderType?: "morning" | "pre_workout" | "workout_time" | "late_warning" | "penalty" | "meal_checkin";
+  lastReminderText?: string;
+}
+
 export interface LineMessage {
   id: string;
   sender: "coach" | "user";
   text: string;
   timestamp: string;
+  recordedMeal?: MealItem;
   card?: {
-    type: "workout_reminder" | "daily_summary" | "adapted_plan" | "nutrition_prompt" | "new_program";
+    type: "workout_reminder" | "daily_summary" | "adapted_plan" | "nutrition_prompt" | "new_program" | "meal_recorded" | "penalty_notice";
     title: string;
     details: string;
     duration?: string;
     tags?: string[];
     workoutPlan?: WorkoutPlan;
     plan3Months?: Plan3MonthsData;
+    penaltyTask?: string;
     actions?: Array<{
       id: string;
       label: string;
-      actionType: "start_workout" | "snooze" | "cannot_do" | "view_plan" | "log_food" | "apply_program";
+      actionType: "start_workout" | "snooze" | "cannot_do" | "view_plan" | "log_food" | "apply_program" | "clear_penalty";
       style?: "primary" | "secondary" | "danger";
     }>;
   };

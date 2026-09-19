@@ -15,6 +15,7 @@ import { PlanGenerationModal } from "./components/PlanGenerationModal";
 import { WeeklyReportModal } from "./components/WeeklyReportModal";
 import { Plan3MonthsModal } from "./components/Plan3MonthsModal";
 import { LandingView } from "./components/LandingView";
+import { LineRichMenuStudioModal } from "./components/LineRichMenuStudioModal";
 
 import {
   initialProfile,
@@ -25,8 +26,9 @@ import {
   initialFitnessStatus,
   initialWeeklyReport,
   initialLineMessages,
+  initialAccountability,
 } from "./data/mockData";
-import { MealItem, RecoveryData, UserProfile, WorkoutPlan, Plan3MonthsData } from "./types";
+import { MealItem, RecoveryData, UserProfile, WorkoutPlan, Plan3MonthsData, CoachAccountabilityState } from "./types";
 
 export function App() {
   // Navigation & View states
@@ -43,6 +45,14 @@ export function App() {
   const [weeklyReport, setWeeklyReport] = useState(initialWeeklyReport);
   const [lineMessages, setLineMessages] = useState(initialLineMessages);
   const [activePlan3Months, setActivePlan3Months] = useState<Plan3MonthsData | null>(null);
+  const [accountability, setAccountability] = useState<CoachAccountabilityState>(() => {
+    try {
+      const saved = localStorage.getItem("fitcoach_accountability");
+      return saved ? JSON.parse(saved) : initialAccountability;
+    } catch {
+      return initialAccountability;
+    }
+  });
 
   // Modal Dialog states
   const [isWorkoutModalOpen, setIsWorkoutModalOpen] = useState(false);
@@ -54,6 +64,7 @@ export function App() {
   const [isPlanGenerating, setIsPlanGenerating] = useState(false);
   const [isWeeklyReportOpen, setIsWeeklyReportOpen] = useState(false);
   const [isPlan3MonthsModalOpen, setIsPlan3MonthsModalOpen] = useState(false);
+  const [isRichMenuStudioOpen, setIsRichMenuStudioOpen] = useState(false);
 
   // Handlers
   const handleCompleteWorkout = (data: { rpe: number; feeling: any; notes: string }) => {
@@ -183,15 +194,73 @@ export function App() {
         body: JSON.stringify({
           message: userText,
           targetDurationMonths: profile.targetDurationMonths,
+          chatHistory: lineMessages.slice(-8),
+          currentWorkout: workout,
+          currentNutrition: nutrition,
+          profile: profile,
+          accountabilityState: accountability,
         }),
       });
       if (res.ok) {
         const data = await res.json();
+
+        // 1. Auto-log meal if coach detected food
+        if (data.recordedMeal) {
+          handleAddMeal(data.recordedMeal);
+        }
+
+        // 2. Handle discipline action
+        if (data.disciplineAction === "warn") {
+          setAccountability((prev) => {
+            const updated: CoachAccountabilityState = {
+              ...prev,
+              strikes: Math.min(3, prev.strikes + 1),
+              status: "overdue",
+              lastReminderType: "late_warning",
+            };
+            try {
+              localStorage.setItem("fitcoach_accountability", JSON.stringify(updated));
+            } catch {}
+            return updated;
+          });
+        } else if (data.disciplineAction === "penalty") {
+          setAccountability((prev) => {
+            const updated: CoachAccountabilityState = {
+              ...prev,
+              strikes: 3,
+              penaltyActive: true,
+              status: "missed_penalty",
+              penaltyTask:
+                data.card?.penaltyTask ||
+                "Burpees 15 ครั้ง หรือ Push-ups 25 ครั้ง เพื่อปลดล็อคบทลงโทษ",
+              lastReminderType: "penalty",
+            };
+            try {
+              localStorage.setItem("fitcoach_accountability", JSON.stringify(updated));
+            } catch {}
+            return updated;
+          });
+        } else if (data.disciplineAction === "praise") {
+          setAccountability((prev) => {
+            const updated: CoachAccountabilityState = {
+              ...prev,
+              strikes: 0,
+              penaltyActive: false,
+              status: "on_track",
+            };
+            try {
+              localStorage.setItem("fitcoach_accountability", JSON.stringify(updated));
+            } catch {}
+            return updated;
+          });
+        }
+
         const replyMsg = {
           id: `c-${Date.now()}`,
           sender: "coach" as const,
           text: data.reply || "รับทราบครับ! ผมคอยดูแลและปรับแผนให้คุณอยู่เสมอครับ",
           timestamp: timeStr,
+          recordedMeal: data.recordedMeal || undefined,
           card: data.card || undefined,
           quickReplies: data.quickActions || undefined,
         };
@@ -211,6 +280,177 @@ export function App() {
     }
   };
 
+  const handleClearPenalty = () => {
+    const now = new Date();
+    const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(
+      now.getMinutes()
+    ).padStart(2, "0")}`;
+
+    setAccountability((prev) => {
+      const updated: CoachAccountabilityState = {
+        ...prev,
+        penaltyActive: false,
+        strikes: 0,
+        status: "on_track",
+      };
+      try {
+        localStorage.setItem("fitcoach_accountability", JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    setStatus((prev) => ({
+      ...prev,
+      xp: prev.xp + 50,
+      disciplineScore: Math.min(100, (prev.disciplineScore || 85) + 15),
+    }));
+
+    setLineMessages((prev) => [
+      ...prev,
+      {
+        id: `u-${Date.now()}`,
+        sender: "user",
+        text: "ส่งการบ้านชดเชยแล้วครับ! ทำภารกิจเสร็จสิ้นเรียบร้อย 💪",
+        timestamp: timeStr,
+      },
+      {
+        id: `c-${Date.now()}`,
+        sender: "coach",
+        text: "สุดยอดมากครับคุณตัน! 👏 ผมบันทึกการส่งการบ้านและปลดล็อคบทลงโทษให้เรียบร้อยแล้ว ได้รับ +50 XP และกู้คืนคะแนนวินัยเต็มที่ พรุ่งนี้มารักษาตารางซ้อมให้ตรงเวลา 18:00 น. กันต่อนะครับ!",
+        timestamp: timeStr,
+        quickReplies: ["เริ่ม Workout วันนี้", "บันทึกอาหาร", "ดูแผนการฝึก"],
+      },
+    ]);
+  };
+
+  const handleTriggerCoachScenario = (
+    scenario: "18_00" | "overdue" | "penalty" | "meal_prompt"
+  ) => {
+    const now = new Date();
+    const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(
+      now.getMinutes()
+    ).padStart(2, "0")}`;
+
+    if (scenario === "18_00") {
+      setAccountability((prev) => {
+        const updated: CoachAccountabilityState = {
+          ...prev,
+          status: "workout_time",
+          scheduledTime: "18:00",
+          lastReminderType: "workout_time",
+        };
+        try {
+          localStorage.setItem("fitcoach_accountability", JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
+
+      setLineMessages((prev) => [
+        ...prev,
+        {
+          id: `c-scen-${Date.now()}`,
+          sender: "coach",
+          text: `⏰ ถึงเวลา 18:00 น. แล้วครับคุณ${profile.name || "ตัน"}! วันนี้เรามีนัดซ้อม "${workout.titleTh || workout.title}" (${workout.durationMinutes} นาที) พร้อมลุยหรือยังครับ? เตรียมชุด เตรียมน้ำดื่มให้พร้อม แล้วกดเริ่มซ้อมได้เลยครับ 💪`,
+          timestamp: timeStr,
+          card: {
+            type: "workout_reminder",
+            title: workout.titleTh || workout.title,
+            details: `${workout.exercises.length} ท่าฝึก • ${workout.durationMinutes} นาที • ความหนัก${workout.intensity}`,
+            duration: `${workout.durationMinutes} นาที`,
+            tags: ["UpperBody", "ตามตาราง 18:00", "เป้าหมายหุ่นนักกีฬา"],
+            workoutPlan: workout,
+          },
+          quickReplies: ["เริ่มเลย 💪", "เลื่อน 30 นาที ⏰", "วันนี้เหนื่อยมาก 😴"],
+        },
+      ]);
+    } else if (scenario === "overdue") {
+      setAccountability((prev) => {
+        const updated: CoachAccountabilityState = {
+          ...prev,
+          status: "overdue",
+          strikes: Math.max(1, prev.strikes + 1),
+          lastReminderType: "late_warning",
+        };
+        try {
+          localStorage.setItem("fitcoach_accountability", JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
+
+      setLineMessages((prev) => [
+        ...prev,
+        {
+          id: `c-scen-${Date.now()}`,
+          sender: "coach",
+          text: `⚠️ คุณ${profile.name || "ตัน"}ครับ! ตอนนี้ 18:45 น. แล้ว เลยเวลานัดซ้อมมา 45 นาทีแล้วนะครับ โค้ชยังไม่เห็นคุณกดเริ่มซ้อมเลย! ถ้าติดงานด่วนแจ้งโค้ชได้ แต่ถ้ายังไหว รีบมากดซ้อม 20-30 นาที ดีกว่าปล่อยหลุดนะครับ วินัยคือหัวใจสำคัญครับ!`,
+          timestamp: timeStr,
+          quickReplies: ["เริ่มซ้อมเดี๋ยวนี้ 💪", "ขอเลื่อน 30 นาที ⏰", "วันนี้ไม่ไหว ปรับแผน"],
+        },
+      ]);
+    } else if (scenario === "penalty") {
+      setAccountability((prev) => {
+        const updated: CoachAccountabilityState = {
+          ...prev,
+          status: "missed_penalty",
+          strikes: 3,
+          penaltyActive: true,
+          penaltyTask: "Burpees 15 ครั้ง หรือ Push-ups 25 ครั้ง เพื่อปลดล็อคบทลงโทษ",
+          lastReminderType: "penalty",
+        };
+        try {
+          localStorage.setItem("fitcoach_accountability", JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
+
+      setLineMessages((prev) => [
+        ...prev,
+        {
+          id: `c-scen-${Date.now()}`,
+          sender: "coach",
+          text: `🚨 คุณ${profile.name || "ตัน"}ครับ วันนี้เลยเวลามามากแล้วและคุณขาดการเข้าซ้อมตามโปรแกรม! ตามระเบียบ FitCoach ได้ทำการบันทึก Strike 3/3 และสั่งเริ่ม **มาตรการลงโทษทางวินัย** เพื่อดึงโมเมนตัมกลับมาครับ!`,
+          timestamp: timeStr,
+          card: {
+            type: "penalty_notice",
+            title: "บทลงโทษเนื่องจากขาดซ้อม (Missed Workout Penalty)",
+            details: "คุณไม่ได้เข้าซ้อมตามเวลาที่นัดหมาย (18:00 น.) จึงถูกหักแต้มวินัย และต้องทำภารกิจชดเชยเพื่อปลดล็อค",
+            penaltyTask: "Burpees 15 ครั้ง หรือ Push-ups 25 ครั้ง เพื่อปลดล็อคบทลงโทษ",
+          },
+          quickReplies: ["ส่งการบ้านชดเชย", "ขออภัยโค้ชครับ เดี๋ยวซ้อมเลย", "ปรับแผนการฝึก"],
+        },
+      ]);
+    } else if (scenario === "meal_prompt") {
+      setAccountability((prev) => {
+        const updated: CoachAccountabilityState = {
+          ...prev,
+          lastReminderType: "meal_checkin",
+        };
+        try {
+          localStorage.setItem("fitcoach_accountability", JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
+
+      setLineMessages((prev) => [
+        ...prev,
+        {
+          id: `c-scen-${Date.now()}`,
+          sender: "coach",
+          text: `🥗 คุณ${profile.name || "ตัน"}ครับ วันนี้กินอะไรไปบ้างแล้ว ส่งเมนูอาหารมาให้โค้ชดูหน่อยครับ! เช่น 'กินกล้วยหอม 2 ลูก', 'กินข้าวมันไก่ตอน 1 จาน' เดี๋ยวโค้ชคำนวณแคลอรีและโปรตีน แล้วบันทึกลงแอปให้อัตโนมัติทันทีครับ!`,
+          timestamp: timeStr,
+          quickReplies: [
+            "กินกล้วยหอม 2 ลูก 🍌",
+            "กินข้าวกะเพราไก่ + ไข่ดาว 🍳",
+            "กินข้าวมันไก่ตอน 1 จาน 🍗",
+            "ดูแคลอรีสะสมวันนี้ 📊",
+          ],
+        },
+      ]);
+    }
+
+    setIsLineModalOpen(true);
+  };
+
   const handleApplyProgramFromChat = (
     newPlan: WorkoutPlan,
     goalTitle?: string,
@@ -227,19 +467,38 @@ export function App() {
         goal: goalTitle,
       }));
     }
+
+    // Coach schedules training at 18:00 and begins proactive tracking
+    setAccountability((prev) => {
+      const updated: CoachAccountabilityState = {
+        ...prev,
+        scheduledTime: "18:00",
+        status: "on_track",
+        strikes: 0,
+        penaltyActive: false,
+        lastReminderType: "pre_workout",
+        lastReminderText: "นัดซ้อมเวลา 18:00 น. วันนี้เรียบร้อยครับ โค้ชจะคอยติดตามตลอดวัน",
+      };
+      try {
+        localStorage.setItem("fitcoach_accountability", JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
     const now = new Date();
     const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(
       now.getMinutes()
     ).padStart(2, "0")}`;
 
-    const durationLabel = plan3Months?.totalDuration || (plan3Months?.totalMonths ? `${plan3Months.totalMonths} เดือน` : "การฝึก");
+    const durationLabel = plan3Months?.totalDuration || (plan3Months?.totalMonths ? `${plan3Months.totalMonths} เดือน` : `${newPlan.durationMinutes} นาที`);
     setLineMessages((prev) => [
       ...prev,
       {
         id: `c-applied-${Date.now()}`,
         sender: "coach",
-        text: `🎯 ผมได้บันทึกแผน ${durationLabel} "${newPlan.titleTh || newPlan.title}" ลงในหน้าหลักของแอปเรียบร้อยแล้วครับ! ทั้งตารางการฝึกรายวัน ข้อมูลโภชนาการ และการพักผ่อน พร้อมเริ่มเซสชันแรกได้เลยครับ 💪`,
+        text: `🎯 ผมได้บันทึกแผน ${durationLabel} "${newPlan.titleTh || newPlan.title}" ลงในหน้าหลักของแอปเรียบร้อยแล้วครับ!\n\n🕒 **ตารางการติดตาม:** ผมนัดเวลาซ้อมของคุณวันนี้ไว้ที่ **18:00 น.** หากถึงเวลาแล้วยังไม่มากดซ้อมผมจะคอยส่งข้อความเตือน และส่งเมนูอาหารมาให้ผมบันทึกอัตโนมัติได้ตลอดวันนะครับ 💪`,
         timestamp: timeStr,
+        quickReplies: ["เริ่ม Workout ตอนนี้", "ส่งเมนูอาหารให้โค้ช", "ดูตารางซ้อม 18:00"],
       },
     ]);
 
@@ -305,6 +564,7 @@ export function App() {
         status={status}
         onOpenLine={() => setIsLineModalOpen(true)}
         onOpenOnboarding={() => setIsOnboardingModalOpen(true)}
+        onOpenRichMenuStudio={() => setIsRichMenuStudioOpen(true)}
       />
 
       {/* Main Container */}
@@ -318,12 +578,16 @@ export function App() {
             status={status}
             profile={profile}
             activePlan3Months={activePlan3Months}
+            accountability={accountability}
             onOpenPlan3Months={() => setIsPlan3MonthsModalOpen(true)}
             onOpenWorkout={() => setIsWorkoutModalOpen(true)}
             onOpenNutrition={() => setIsNutritionModalOpen(true)}
             onOpenRecovery={() => setIsRecoveryModalOpen(true)}
             onOpenAdapt={() => setIsAdaptiveModalOpen(true)}
             onOpenLine={() => setIsLineModalOpen(true)}
+            onOpenRichMenuStudio={() => setIsRichMenuStudioOpen(true)}
+            onTriggerCoachScenario={handleTriggerCoachScenario}
+            onClearPenalty={handleClearPenalty}
           />
         )}
 
@@ -409,6 +673,11 @@ export function App() {
         <LineBotChatModal
           messages={lineMessages}
           workout={workout}
+          accountability={accountability}
+          currentCalories={nutrition.currentCalories}
+          calorieTarget={nutrition.targetCalories}
+          disciplineScore={status.disciplineScore || 93}
+          onClearPenalty={handleClearPenalty}
           onClose={() => setIsLineModalOpen(false)}
           onSendMessage={handleSendLineMessage}
           onStartWorkout={() => {
@@ -421,6 +690,26 @@ export function App() {
             setIsAdaptiveModalOpen(true);
           }}
           onApplyProgram={handleApplyProgramFromChat}
+          onOpenPlan3Months={() => {
+            setIsLineModalOpen(false);
+            setIsPlan3MonthsModalOpen(true);
+          }}
+          onOpenNutrition={() => {
+            setIsLineModalOpen(false);
+            setIsNutritionModalOpen(true);
+          }}
+          onOpenWeeklyReport={() => {
+            setIsLineModalOpen(false);
+            setIsWeeklyReportOpen(true);
+          }}
+        />
+      )}
+
+      {/* LINE Rich Menu Standalone Studio Modal */}
+      {isRichMenuStudioOpen && (
+        <LineRichMenuStudioModal
+          onClose={() => setIsRichMenuStudioOpen(false)}
+          accountability={accountability}
         />
       )}
 

@@ -1,5 +1,5 @@
 import React from "react";
-import { MessageSquare, Flame, Sparkles } from "lucide-react";
+import { MessageSquare, Flame, Sparkles, LayoutGrid } from "lucide-react";
 import { FitnessStatus, UserProfile } from "../types";
 
 interface HeaderProps {
@@ -7,6 +7,7 @@ interface HeaderProps {
   status: FitnessStatus;
   onOpenLine: () => void;
   onOpenOnboarding: () => void;
+  onOpenRichMenuStudio?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -14,6 +15,7 @@ export const Header: React.FC<HeaderProps> = ({
   status,
   onOpenLine,
   onOpenOnboarding,
+  onOpenRichMenuStudio,
 }) => {
   return (
     <header className="sticky top-0 z-30 bg-slate-900 text-white shadow-md border-b border-slate-800">
@@ -58,6 +60,18 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="text-slate-300 font-medium">Condition</span>
             <span className="text-emerald-400 font-bold">{status.condition}%</span>
           </div>
+
+          {/* LINE Rich Menu Studio Button */}
+          {onOpenRichMenuStudio && (
+            <button
+              onClick={onOpenRichMenuStudio}
+              title="ออกแบบ & ดูสเปก LINE Rich Menu (2500x1686 px)"
+              className="hidden sm:flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-semibold px-2.5 py-1.5 rounded-full border border-slate-700 transition-all active:scale-95"
+            >
+              <LayoutGrid className="w-3.5 h-3.5 text-[#06C755]" />
+              <span>Rich Menu</span>
+            </button>
+          )}
 
           {/* LINE Bot Trainer Trigger */}
           <button
