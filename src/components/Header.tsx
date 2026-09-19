@@ -1,6 +1,7 @@
 import React from "react";
 import { MessageSquare, Flame, Sparkles, LayoutGrid, Activity } from "lucide-react";
 import { FitnessStatus, UserProfile } from "../types";
+import { PWAInstallButton } from "./PWAInstallButton";
 
 interface HeaderProps {
   profile: UserProfile;
@@ -58,6 +59,9 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right actions: Condition badge & LINE Coach button */}
         <div className="flex items-center gap-2">
+          {/* PWA Install Button */}
+          <PWAInstallButton />
+
           {/* Condition Indicator */}
           <div className="hidden sm:flex items-center gap-1.5 bg-slate-800/80 px-2.5 py-1 rounded-full border border-slate-700 text-xs">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>

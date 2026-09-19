@@ -929,6 +929,26 @@ ${
 
 // Start Server and mount Vite
 async function startServer() {
+  // เสิร์ฟ Service Worker จาก Root Path พร้อม Header สำหรับ PWA (no-cache และ Service-Worker-Allowed)
+  app.get("/sw.js", (_req, res) => {
+    res.setHeader("Content-Type", "application/javascript");
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Service-Worker-Allowed", "/");
+    const swPath = process.env.NODE_ENV !== "production"
+      ? path.join(process.cwd(), "public", "sw.js")
+      : path.join(process.cwd(), "dist", "sw.js");
+    res.sendFile(swPath);
+  });
+
+  // เสิร์ฟ Web App Manifest พร้อม Header Content-Type ที่ถูกต้อง
+  app.get(["/manifest.webmanifest", "/manifest.json"], (_req, res) => {
+    res.setHeader("Content-Type", "application/manifest+json");
+    const manifestPath = process.env.NODE_ENV !== "production"
+      ? path.join(process.cwd(), "public", "manifest.webmanifest")
+      : path.join(process.cwd(), "dist", "manifest.webmanifest");
+    res.sendFile(manifestPath);
+  });
+
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },

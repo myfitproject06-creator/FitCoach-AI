@@ -3,8 +3,33 @@ import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 
+// ลงทะเบียน Service Worker เฉพาะในโหมด Production ตามข้อกำหนด
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('/sw.js', { scope: '/' })
+      .then((registration) => {
+        // ตรวจสอบการอัปเดต Service Worker เมื่อมีเวอร์ชันใหม่
+        registration.onupdatefound = () => {
+          const installingWorker = registration.installing;
+          if (installingWorker) {
+            installingWorker.onstatechange = () => {
+              if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                console.log('FitCoach AI: มีเวอร์ชันใหม่พร้อมใช้งานแล้ว');
+              }
+            };
+          }
+        };
+      })
+      .catch((error) => {
+        console.warn('FitCoach ServiceWorker registration failed:', error);
+      });
+  });
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />
   </StrictMode>,
 );
+
