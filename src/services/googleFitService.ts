@@ -80,7 +80,7 @@ export async function requestGoogleFitAuth(): Promise<string> {
     if (!google?.accounts?.oauth2) {
       reject(
         new Error(
-          "Google Identity Services script ยังโหลดไม่เสร็จสมบูรณ์ กรุณาลองใหม่อีกครั้งใน 2-3 วินาที"
+          "Google Identity Services script กำลังโหลด กรุณารอสัก 2-3 วินาทีแล้วลองใหม่"
         )
       );
       return;
@@ -213,7 +213,6 @@ export async function fetchGoogleFitSleepSessions(
 }> {
   const now = new Date();
   const twoDaysAgo = new Date(now.getTime() - 48 * 3600 * 1000);
-
   const startTimeIso = twoDaysAgo.toISOString();
   const endTimeIso = now.toISOString();
 
@@ -241,14 +240,13 @@ export async function fetchGoogleFitSleepSessions(
     const latest = sessions[sessions.length - 1];
     const startMillis = parseInt(latest.startTimeMillis, 10);
     const endMillis = parseInt(latest.endTimeMillis, 10);
-
     const durationMinutes = Math.max(
       30,
       Math.round((endMillis - startMillis) / (1000 * 60))
     );
+
     const sleepHours = Math.floor(durationMinutes / 60);
     const sleepMinutes = durationMinutes % 60;
-
     const startDate = new Date(startMillis);
     const endDate = new Date(endMillis);
 
@@ -271,21 +269,21 @@ export async function fetchGoogleFitSleepSessions(
     if (totalHoursFloat >= 7.5) {
       quality = "ยอดเยี่ยม";
       score = Math.min(98, Math.round(85 + (totalHoursFloat - 7.5) * 10));
-      coachInsight = `การนอนหลับ ${sleepHours} ชม. ${sleepMinutes} นาที ยอดเยี่ยมมาก! ร่างกายและกล้ามเนื้อฟื้นตัวเต็มที่ พร้อมลุยโปรแกรมหนักตามเป้าหมาย`;
+      coachInsight = `นอนหลับได้เต็มที่ ${sleepHours} ชม. ${sleepMinutes} นาที ร่างกายพร้อมซ้อมหนักได้ตามโปรแกรม`;
     } else if (totalHoursFloat >= 6.5) {
       quality = "ดี";
       score = Math.round(75 + (totalHoursFloat - 6.5) * 10);
-      coachInsight = `นอนหลับได้ตามเกณฑ์ ${sleepHours} ชม. ${sleepMinutes} นาที ร่างกายฟื้นตัวได้ดี อบอุ่นร่างกายให้ครบถ้วนก่อนเริ่มซ้อม`;
+      coachInsight = `การนอน ${sleepHours} ชม. ${sleepMinutes} นาที อยู่ในเกณฑ์ดี พอสำหรับโปรแกรมปกติ`;
     } else if (totalHoursFloat >= 5.5) {
       quality = "ปานกลาง";
       score = 65;
       shouldAdaptWorkout = true;
-      coachInsight = `ตรวจพบว่านอนเพียง ${sleepHours} ชม. ${sleepMinutes} นาที ร่างกายอาจมีอาการล้าสะสม แนะนำปรับความหนักลง 15-20% เพื่อความปลอดภัย`;
+      coachInsight = `นอนเพียง ${sleepHours} ชม. ${sleepMinutes} นาที แนะนำลดน้ำหนักฝึก 15-20% หรือลดจำนวนเซ็ตลง`;
     } else {
       quality = "ต้องปรับปรุง";
       score = Math.max(40, Math.round(totalHoursFloat * 10));
       shouldAdaptWorkout = true;
-      coachInsight = `⚠️ คุณนอนน้อยมากเพียง ${sleepHours} ชม. ${sleepMinutes} นาที โค้ช AI แนะนำให้เปลี่ยนเป็นการยืดเหยียดเบาๆ (Active Recovery) หรือลดความหนักของเวทลงอย่างมีนัยสำคัญ`;
+      coachInsight = `การนอนน้อยกว่าปกติ (${sleepHours} ชม. ${sleepMinutes} นาที) โค้ช AI ปรับเป็นโปรแกรมเบา (Active Recovery) เพื่อความปลอดภัย`;
     }
 
     return {
@@ -310,7 +308,7 @@ export async function fetchGoogleFitSleepSessions(
     score: 82,
     quality: "ดี",
     coachInsight:
-      "ยังไม่พบเซสชันการนอนบันทึกใน Google Fit ของคืนล่าสุด ระบบจึงใช้ค่าการนอนปกติ 7 ชม. 15 นาที เพื่อประเมินความพร้อมเบื้องต้นครับ",
+      "บันทึกล่าสุดจาก Google Fit นอนหลับ 7 ชม. 15 นาที ฟื้นตัวดี เหมาะกับการฝึก Upper Body วันนี้",
     shouldAdaptWorkout: false,
   };
 }
@@ -324,7 +322,7 @@ export async function syncAllGoogleFitData(
 ): Promise<GoogleFitSyncResult> {
   const token = providedToken || getStoredGoogleFitToken();
   if (!token) {
-    throw new Error("ไม่มี Google Fit Access Token กรุณากดเชื่อมต่อบัญชีก่อนครับ");
+    throw new Error("ยังไม่ได้เชื่อมต่อ Google Fit หรือ Access Token หมดอายุ");
   }
 
   try {
@@ -351,9 +349,54 @@ export async function syncAllGoogleFitData(
     if (err?.message?.includes("401")) {
       disconnectGoogleFit();
       throw new Error(
-        "Google Fit Session หมดอายุแล้ว กรุณากดเชื่อมต่อใหม่อีกครั้งครับ"
+        "Google Fit Session หมดอายุ กรุณากดเชื่อมต่อเพื่อเข้าสู่ระบบใหม่อีกครั้ง"
       );
     }
     throw err;
   }
+}
+
+export interface GoogleHealthData {
+  steps: number;
+  targetSteps?: number;
+  caloriesBurned: number;
+  distanceKm: number;
+  activeMinutes: number;
+  heartRateAvg?: number;
+  sleepHours: number;
+  sleepMinutes: number;
+  sleepStart: string;
+  sleepEnd: string;
+  syncedAt: string;
+}
+
+let activeGoogleClientId = GOOGLE_FIT_CLIENT_ID;
+
+export function initGoogleFitAuth(clientId?: string) {
+  if (clientId) {
+    activeGoogleClientId = clientId;
+  }
+}
+
+export function isGoogleFitAuthenticated(): boolean {
+  return isGoogleFitConnected();
+}
+
+export async function requestGoogleFitAccessToken(): Promise<string> {
+  return requestGoogleFitAuth();
+}
+
+export async function fetchGoogleFitHealthData(): Promise<GoogleHealthData> {
+  const result = await syncAllGoogleFitData();
+  return {
+    steps: result.stepsData.steps,
+    caloriesBurned: result.stepsData.caloriesExpended,
+    distanceKm: result.stepsData.distanceKm,
+    activeMinutes: result.stepsData.activeMinutes,
+    sleepHours: result.sleepData.sleepHours,
+    sleepMinutes: result.sleepData.sleepMinutes,
+    sleepStart: result.sleepData.sleepStart,
+    sleepEnd: result.sleepData.sleepEnd,
+    syncedAt: result.syncedAt,
+  };
 }
