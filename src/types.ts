@@ -3,24 +3,30 @@ export interface Exercise {
   name: string;
   nameTh?: string;
   sets: number;
-  reps: string;
-  suggestedWeight: string;
+  reps: string | number;
+  suggestedWeight?: string;
   actualWeight?: string;
   actualReps?: string;
   restSeconds: number;
   completed?: boolean;
   notes?: string;
   image?: string;
-  category?: "chest" | "back" | "shoulders" | "arms" | "legs" | "core" | "mobility";
+  category?: "chest" | "back" | "shoulders" | "arms" | "legs" | "core" | "mobility" | string;
+  instructions?: string;
+  tips?: string;
+  videoUrl?: string;
+  targetMuscle?: string;
 }
 
 export interface WorkoutPlan {
   id: string;
-  title: string;
-  titleTh: string;
+  title?: string;
+  titleTh?: string;
+  dayName?: string;
+  focusArea?: string;
   durationMinutes: number;
-  intensity: "เบา" | "ปานกลาง" | "หนัก" | "ฟื้นฟู";
-  split: string;
+  intensity: string;
+  split?: string;
   exercises: Exercise[];
   isCompleted?: boolean;
   isAdapted?: boolean;
@@ -33,7 +39,7 @@ export interface WorkoutPlan {
 export interface MealItem {
   id: string;
   name: string;
-  portion: string;
+  portion?: string;
   calories: number;
   protein: number;
   carbs: number;
@@ -41,6 +47,7 @@ export interface MealItem {
   time: string;
   isEstimate?: boolean;
   tip?: string;
+  type?: "breakfast" | "lunch" | "dinner" | "snack";
 }
 
 export interface NutritionData {
@@ -58,17 +65,18 @@ export interface NutritionData {
 export interface RecoveryData {
   sleepHours: number;
   sleepMinutes: number;
-  targetSleepHours: string;
-  quality: "ยอดเยี่ยม" | "ดี" | "ปานกลาง" | "ต้องปรับปรุง";
-  score: number; // 0 - 100
-  sleepStart: string;
-  sleepEnd: string;
-  fatigueLevel: "ต่ำ" | "ปานกลาง" | "สูง";
-  muscleSoreness: "ไม่มี" | "เล็กน้อย" | "ปานกลาง" | "มาก";
-  restingHeartRate: number;
-  coachInsight: string;
+  targetSleepHours?: string;
+  quality: string;
+  score?: number;
+  sleepStart?: string;
+  sleepEnd?: string;
+  fatigueLevel?: "ต่ำ" | "ปานกลาง" | "สูง" | string;
+  muscleSoreness?: "ไม่มี" | "เล็กน้อย" | "ปานกลาง" | "ระบมมาก" | string;
+  restingHeartRate?: number;
+  coachInsight?: string;
   isFromGoogleHealth?: boolean;
   lastSyncedAt?: string;
+  deepSleepPercent?: number;
 }
 
 export interface ActivityData {
@@ -85,7 +93,7 @@ export interface FitnessStatus {
   level: number;
   xp: number;
   nextLevelXp: number;
-  rank: "S" | "A" | "B" | "C" | "D";
+  rank: "S" | "A" | "B" | "C" | "D" | string;
   strength: number;    // STR
   endurance: number;   // END
   mobility: number;    // MOB
@@ -97,35 +105,45 @@ export interface FitnessStatus {
   momentumDays: number;     // 8 days streak
   programAdherence: number; // 93%
   disciplineScore?: number; // 0 - 100%
+  streakDays?: number;
 }
 
 export interface UserProfile {
   name: string;
   goal: string;
   customGoalText?: string;
+  primaryGoal?: string;
   age: number;
-  sex: "Male" | "Female" | "Other";
+  sex: "Male" | "Female" | "Other" | string;
+  gender?: "male" | "female" | "other" | string;
   height: number;
+  heightCm?: number;
   weight: number;
+  weightKg?: number;
   waistCm?: number;
-  fitnessLevel: "Beginner" | "Intermediate" | "Advanced";
+  fitnessLevel: string;
   experience: string;
   daysPerWeek: number;
   durationMinutes: number;
-  preferredTime: "เช้า" | "บ่าย" | "เย็น" | "ค่ำ";
-  environment: "Gym" | "Home" | "Outdoor" | "Mixed";
-  equipment: string[];
-  activityLevel: "Sedentary" | "Light" | "Moderate" | "Very Active";
-  sleepHoursTypical: number;
-  sleepQualityTypical: string;
-  dietStyle: string;
-  allergies: string[];
-  dislikedFoods: string[];
-  mealsPerDay: number;
-  limitations: string[];
+  preferredTime: string;
+  preferredLocation?: string;
+  environment?: "Gym" | "Home" | "Outdoor" | "Mixed" | string;
+  equipment?: string[];
+  activityLevel?: "Sedentary" | "Light" | "Moderate" | "Very Active" | string;
+  sleepHoursTypical?: number;
+  sleepQualityTypical?: string;
+  dietStyle?: string;
+  allergies?: string[];
+  dislikedFoods?: string[];
+  mealsPerDay?: number;
+  limitations?: string[];
   targetDurationMonths?: number;
-  lineConnected: boolean;
-  lineNotificationTime: string;
+  lineConnected?: boolean;
+  lineNotificationTime?: string;
+  hasInjuries?: boolean;
+  injuryDetails?: string;
+  sleepHoursGoal?: number;
+  dailyWaterGoalLiters?: number;
 }
 
 export interface Plan3MonthsData {
@@ -162,6 +180,15 @@ export interface CoachAccountabilityState {
   penaltyTask?: string;
   lastReminderType?: "morning" | "pre_workout" | "workout_time" | "late_warning" | "penalty" | "meal_checkin";
   lastReminderText?: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  sender: "user" | "bot" | "coach" | "system";
+  text: string;
+  timestamp: string;
+  image?: string;
+  quickReplies?: string[];
 }
 
 export interface LineMessage {
@@ -201,6 +228,34 @@ export interface WeeklyReportData {
   wins: string[];
   improvements: string[];
   coachSummary: string;
+}
+
+export interface WeeklyReport {
+  weekRange: string;
+  consistencyScore: number;
+  workoutsCompleted: number;
+  workoutsTarget: number;
+  xpGained: number;
+  totalCaloriesBurned: number;
+  highlights: string[];
+  coachFeedback: string;
+}
+
+export interface OnboardingForm {
+  name: string;
+  gender: "male" | "female" | "other";
+  age: number;
+  heightCm: number;
+  weightKg: number;
+  primaryGoal: string;
+  fitnessLevel: string;
+  daysPerWeek: number;
+  preferredLocation: string;
+  preferredTime: string;
+  hasInjuries: boolean;
+  injuryDetails: string;
+  sleepHoursGoal: number;
+  dailyWaterGoalLiters: number;
 }
 
 export interface GoogleHealthSyncState {
