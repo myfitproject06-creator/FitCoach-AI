@@ -3,13 +3,15 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
+import { registerLineWebhook } from "./line-webhook";
 
 dotenv.config();
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
-app.use(express.json());
+app.use(express.json({ verify: (req: any, _res, buf) => { req.rawBody = buf; } }));
+registerLineWebhook(app, PORT);
 
 // Initialize Gemini client lazily/safely
 let aiClient: GoogleGenAI | null = null;
