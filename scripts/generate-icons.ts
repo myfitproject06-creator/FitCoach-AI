@@ -5,7 +5,6 @@ import sharp from "sharp";
 // Ensure public directories exist
 const publicDir = path.join(process.cwd(), "public");
 const iconsDir = path.join(publicDir, "icons");
-
 if (!fs.existsSync(publicDir)) fs.mkdirSync(publicDir, { recursive: true });
 if (!fs.existsSync(iconsDir)) fs.mkdirSync(iconsDir, { recursive: true });
 
@@ -26,26 +25,21 @@ function createFitCoachSvg(isMaskable = false): string {
       <stop offset="45%" stop-color="#059669" />
       <stop offset="100%" stop-color="#06C755" />
     </linearGradient>
-
     <!-- Inner Radial Glow -->
     <radialGradient id="glowGrad" cx="50%" cy="48%" r="45%">
       <stop offset="0%" stop-color="#34D399" stop-opacity="0.35" />
       <stop offset="60%" stop-color="#10B981" stop-opacity="0.1" />
       <stop offset="100%" stop-color="#043927" stop-opacity="0" />
     </radialGradient>
-
     <!-- Drop Shadow for Icon Elements -->
     <filter id="shadow" x="-10%" y="-10%" width="125%" height="125%">
       <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#022c1e" flood-opacity="0.55" />
     </filter>
   </defs>
-
   <!-- Background Base -->
   ${bgShape}
-
   <!-- Ambient RPG Glow -->
   <circle cx="256" cy="250" r="210" fill="url(#glowGrad)" />
-
   <!-- Main Emblem Group with Shadow -->
   <g filter="url(#shadow)">
     <!-- RPG Level-Up Chevrons (Top & Center) -->
@@ -91,7 +85,6 @@ function createFitCoachSvg(isMaskable = false): string {
 
 async function main() {
   console.log("Generating FitCoach AI PWA Icons...");
-
   const standardSvg = createFitCoachSvg(false);
   const maskableSvg = createFitCoachSvg(true);
 
@@ -103,7 +96,7 @@ async function main() {
   fs.writeFileSync(standardSvgPath, standardSvg, "utf8");
   fs.writeFileSync(maskableSvgPath, maskableSvg, "utf8");
   fs.writeFileSync(faviconSvgPath, standardSvg, "utf8");
-  console.log("✓ Saved SVGs");
+  console.log("  Saved SVGs");
 
   // 2. Generate PNGs using sharp
   // icon-192.png
@@ -111,21 +104,21 @@ async function main() {
     .resize(192, 192)
     .png()
     .toFile(path.join(iconsDir, "icon-192.png"));
-  console.log("✓ Generated icon-192.png");
+  console.log("  Generated icon-192.png");
 
   // icon-512.png
   await sharp(Buffer.from(standardSvg))
     .resize(512, 512)
     .png()
     .toFile(path.join(iconsDir, "icon-512.png"));
-  console.log("✓ Generated icon-512.png");
+  console.log("  Generated icon-512.png");
 
   // icon-maskable-512.png
   await sharp(Buffer.from(maskableSvg))
     .resize(512, 512)
     .png()
     .toFile(path.join(iconsDir, "icon-maskable-512.png"));
-  console.log("✓ Generated icon-maskable-512.png");
+  console.log("  Generated icon-maskable-512.png");
 
   // apple-touch-icon.png (180x180 solid background)
   // Apple requires solid background (no transparency on corners)
@@ -133,19 +126,20 @@ async function main() {
     .resize(180, 180)
     .png()
     .toFile(path.join(iconsDir, "apple-touch-icon.png"));
+
   // Also copy to root public/ for standard apple devices requesting /apple-touch-icon.png
   await sharp(Buffer.from(maskableSvg))
     .resize(180, 180)
     .png()
     .toFile(path.join(publicDir, "apple-touch-icon.png"));
-  console.log("✓ Generated apple-touch-icon.png (180x180)");
+  console.log("  Generated apple-touch-icon.png (180x180)");
 
   // favicon.png (48x48)
   await sharp(Buffer.from(standardSvg))
     .resize(48, 48)
     .png()
     .toFile(path.join(publicDir, "favicon.png"));
-  console.log("✓ Generated favicon.png");
+  console.log("  Generated favicon.png");
 
   console.log("All icons generated successfully!");
 }
