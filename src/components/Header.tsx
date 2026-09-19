@@ -5,17 +5,21 @@ import { PWAInstallButton } from "./PWAInstallButton";
 
 interface HeaderProps {
   profile: UserProfile;
-  status: FitnessStatus;
+  status?: FitnessStatus;
   sessionUser?: {
     userId?: string;
     displayName?: string;
     pictureUrl?: string;
   } | null;
-  onOpenLine: () => void;
+  onOpenLine?: () => void;
+  onOpenChat?: () => void;
   onOpenOnboarding: () => void;
   onOpenRichMenuStudio?: () => void;
   onOpenGoogleHealth?: () => void;
   isGoogleHealthConnected?: boolean;
+  onToggleRichMenuDrawer?: () => void;
+  isInstallable?: boolean;
+  onInstallPWA?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -23,11 +27,16 @@ export const Header: React.FC<HeaderProps> = ({
   status,
   sessionUser,
   onOpenLine,
+  onOpenChat,
   onOpenOnboarding,
   onOpenRichMenuStudio,
   onOpenGoogleHealth,
   isGoogleHealthConnected,
+  onToggleRichMenuDrawer,
+  isInstallable,
+  onInstallPWA,
 }) => {
+  const handleOpenChat = onOpenLine || onOpenChat || (() => {});
   return (
     <header className="sticky top-0 z-30 bg-slate-900 text-white shadow-md border-b border-slate-800">
       <div className="max-w-xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -35,7 +44,7 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex items-center gap-3">
           <button
             onClick={onOpenOnboarding}
-            title="แก้ไขโปรไฟล์ / แบบสอบถาม"
+            title="แก้ไขข้อมูล / ประเมินใหม่"
             className="relative group focus:outline-none"
           >
             <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 p-[2px] transition-transform group-hover:scale-105 flex items-center justify-center overflow-hidden">
@@ -68,7 +77,7 @@ export const Header: React.FC<HeaderProps> = ({
               </span>
             </div>
             <h1 className="text-sm font-semibold text-slate-100 flex items-center gap-1">
-              สวัสดี, {sessionUser?.displayName || profile.name || "คุณ"}
+              สวัสดี, {sessionUser?.displayName || profile.name || "เพื่อนรัก"}
             </h1>
           </div>
         </div>
@@ -79,17 +88,19 @@ export const Header: React.FC<HeaderProps> = ({
           <PWAInstallButton />
 
           {/* Condition Indicator */}
-          <div className="hidden sm:flex items-center gap-1.5 bg-slate-800/80 px-2.5 py-1 rounded-full border border-slate-700 text-xs">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span className="text-slate-300 font-medium">Condition</span>
-            <span className="text-emerald-400 font-bold">{status.condition}%</span>
-          </div>
+          {status && (
+            <div className="hidden sm:flex items-center gap-1.5 bg-slate-800/80 px-2.5 py-1 rounded-full border border-slate-700 text-xs">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span className="text-slate-300 font-medium">Condition</span>
+              <span className="text-emerald-400 font-bold">{status.condition ?? 88}%</span>
+            </div>
+          )}
 
           {/* Google Health Sync Button */}
           {onOpenGoogleHealth && (
             <button
               onClick={onOpenGoogleHealth}
-              title="ซิงค์ Google Health (Google Fit)"
+              title="ซิงค์ข้อมูล Google Health (Google Fit)"
               className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-semibold px-2.5 py-1.5 rounded-full border border-slate-700 transition-all active:scale-95"
             >
               <Activity className={`w-3.5 h-3.5 ${isGoogleHealthConnected ? "text-teal-400" : "text-slate-400"}`} />
@@ -100,23 +111,23 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          {/* LINE Rich Menu Studio Button */}
-          {onOpenRichMenuStudio && (
+          {/* LINE Rich Menu Toggle / Studio Button */}
+          {onToggleRichMenuDrawer && (
             <button
-              onClick={onOpenRichMenuStudio}
-              title="ออกแบบ LINE Rich Menu (2500x1686 px)"
-              className="hidden sm:flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-semibold px-2.5 py-1.5 rounded-full border border-slate-700 transition-all active:scale-95"
+              onClick={onToggleRichMenuDrawer}
+              title="เปิด/ปิด เมนูลัด LINE Rich Menu"
+              className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-semibold px-2.5 py-1.5 rounded-full border border-slate-700 transition-all active:scale-95"
             >
               <LayoutGrid className="w-3.5 h-3.5 text-[#06C755]" />
-              <span>Rich Menu</span>
+              <span className="hidden md:inline">Rich Menu</span>
             </button>
           )}
 
           {/* LINE Bot Trainer Trigger */}
           <button
             id="open-line-bot-btn"
-            onClick={onOpenLine}
-            className="relative flex items-center gap-1.5 bg-[#06C755] hover:bg-[#05b34c] text-white text-xs font-semibold px-3 py-1.5 rounded-full transition-all active:scale-95 shadow-sm shadow-[#06C755]/20"
+            onClick={handleOpenChat}
+            className="relative flex items-center gap-1.5 bg-[#06C755] hover:bg-[#05b34c] text-white text-xs font-semibold px-3 py-1.5 rounded-full transition-all active:scale-95 shadow-sm shadow-[#06C755]/20 cursor-pointer"
           >
             <MessageSquare className="w-3.5 h-3.5" />
             <span>LINE Trainer</span>

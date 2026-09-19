@@ -2,151 +2,186 @@ import React, { useState } from "react";
 import {
   X,
   Moon,
+  Footprints,
+  Heart,
   BatteryCharging,
   Sparkles,
-  Heart,
+  Zap,
   TrendingUp,
-  Info,
+  AlertCircle,
+  CheckCircle2,
 } from "lucide-react";
-import { RecoveryData, FitnessStatus } from "../types";
+import { RecoveryData } from "../types";
 
 interface RecoveryModalProps {
   isOpen: boolean;
   onClose: () => void;
   recovery: RecoveryData;
-  status: FitnessStatus;
-  onUpdateSleep: (hours: number, minutes: number) => void;
+  onUpdateRecovery: (updated: Partial<RecoveryData>) => void;
 }
 
 export const RecoveryModal: React.FC<RecoveryModalProps> = ({
   isOpen,
   onClose,
   recovery,
-  status,
-  onUpdateSleep,
+  onUpdateRecovery,
 }) => {
-  const [hours, setHours] = useState<number>(recovery.sleepHours);
-  const [minutes, setMinutes] = useState<number>(recovery.sleepMinutes);
+  const currentReadiness = recovery.readinessScore ?? recovery.score ?? 85;
+  const currentSleepScore = recovery.sleepQualityScore ?? recovery.score ?? 80;
+  const [sleepHours, setSleepHours] = useState(recovery.sleepHours.toString());
+  const [sleepScore, setSleepScore] = useState(currentSleepScore.toString());
+  const [rpeScore, setRpeScore] = useState((recovery.rpeScore ?? 5).toString());
+  const [steps, setSteps] = useState((recovery.steps ?? 7500).toString());
+  const [hrv, setHrv] = useState((recovery.hrvMs ?? 65).toString());
 
   if (!isOpen) return null;
 
-  const handleSave = () => {
-    onUpdateSleep(Number(hours), Number(minutes));
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    onUpdateRecovery({
+      sleepHours: parseFloat(sleepHours) || 7,
+      score: parseInt(sleepScore, 10) || 80,
+      sleepQualityScore: parseInt(sleepScore, 10) || 80,
+      rpeScore: parseInt(rpeScore, 10) || 5,
+      steps: parseInt(steps, 10) || 8000,
+      hrvMs: parseInt(hrv, 10) || 60,
+    });
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
-      <div className="w-full max-w-md rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 animate-in fade-in duration-200">
+      <div className="w-full max-w-lg rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="bg-indigo-950 text-white p-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-300 flex items-center justify-center">
+        <div className="bg-slate-900 text-white p-4 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
               <Moon className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-white">
-                การนอนและการฟื้นตัว (RECOVER)
-              </h3>
-              <p className="text-[11px] text-indigo-300">
-                สภาพร่างกายปัจจุบัน: Condition {status.condition}%
+              <h3 className="text-sm font-bold text-white">การฟื้นฟูร่างกาย & การนอน (RECOVER)</h3>
+              <p className="text-[11px] text-slate-400">
+                ดัชนีพร้อมซ้อม Readiness: {currentReadiness}/100
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-indigo-900 text-indigo-300 hover:text-white flex items-center justify-center transition-colors"
+            className="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Content */}
-        <div className="p-4 space-y-4">
-          {/* Recovery Score Card */}
-          <div className="bg-slate-900 text-white rounded-2xl p-4 flex items-center justify-between">
+        {/* Content Body */}
+        <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1">
+          {/* Readiness Status banner */}
+          <div className="bg-indigo-50/70 border border-indigo-100 rounded-2xl p-4 flex items-center gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-indigo-600 text-white flex flex-col items-center justify-center font-black shrink-0 shadow-sm">
+              <span className="text-xl leading-none">{currentReadiness}</span>
+              <span className="text-[9px] font-medium tracking-tighter mt-0.5">READY</span>
+            </div>
             <div>
-              <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">
-                คะแนนการฟื้นฟูของร่างกาย
+              <span className="text-xs font-bold text-indigo-950 block">
+                {currentReadiness >= 80
+                  ? "สภาพร่างกายยอดเยี่ยม พร้อมซ้อมเต็มสูบ!"
+                  : currentReadiness >= 60
+                  ? "ความพร้อมปานกลาง ซ้อมได้ตามปกติแต่ควรฟังเสียงร่างกาย"
+                  : "ร่างกายล้าสะสม แนะนำให้ลดโวลุ่มหรือยืดเหยียด"}
               </span>
-              <h4 className="text-xl font-black text-white mt-0.5">
-                {status.recovery} / 100
-              </h4>
-              <p className="text-[11px] text-slate-300 mt-0.5">
-                {recovery.quality ? `${recovery.quality} (หลับลึก ${recovery.deepSleepPercent}%)` : "ยังไม่มีข้อมูลบันทึกการนอน"}
+              <p className="text-[11px] text-indigo-800/80 mt-1 leading-relaxed">
+                คำนวณจากระยะเวลานอน {recovery.sleepHours} ชม. คุณภาพการหลับ {currentSleepScore}% และระดับความล้า
               </p>
             </div>
-            <div className="w-12 h-12 rounded-full border-4 border-indigo-500 flex items-center justify-center font-black text-sm text-indigo-400">
-              {status.recovery}%
-            </div>
           </div>
 
-          {/* Quick Sleep Edit Form */}
-          <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-2">
-            <label className="text-xs font-bold text-slate-800 block">
-              บันทึกเวลาการนอนเมื่อคืน:
-            </label>
-            <div className="flex items-center gap-3">
-              <div className="flex-1">
-                <span className="text-[10px] text-slate-500 block mb-1">ชั่วโมง</span>
+          {/* Form to manual adjust or sync */}
+          <form onSubmit={handleSave} className="space-y-3">
+            <div>
+              <label className="text-xs font-bold text-slate-800 block mb-1">
+                ชั่วโมงการนอนหลับเมื่อคืน (ชม.)
+              </label>
+              <input
+                type="number"
+                step="0.1"
+                value={sleepHours}
+                onChange={(e) => setSleepHours(e.target.value)}
+                className="w-full text-xs p-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-bold text-slate-800 block mb-1">
+                  คะแนนคุณภาพการนอน (0-100)
+                </label>
                 <input
                   type="number"
-                  min={0}
-                  max={16}
-                  value={hours}
-                  onChange={(e) => setHours(Number(e.target.value))}
-                  className="w-full text-sm font-bold p-2 rounded-xl border border-slate-300 bg-white text-center"
+                  value={sleepScore}
+                  onChange={(e) => setSleepScore(e.target.value)}
+                  className="w-full text-xs p-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:outline-none focus:border-indigo-500"
                 />
               </div>
-              <div className="flex-1">
-                <span className="text-[10px] text-slate-500 block mb-1">นาที</span>
+
+              <div>
+                <label className="text-xs font-bold text-slate-800 block mb-1">
+                  ระดับความเหนื่อยล้าสะสม RPE (1-10)
+                </label>
                 <input
                   type="number"
-                  min={0}
-                  max={59}
-                  step={5}
-                  value={minutes}
-                  onChange={(e) => setMinutes(Number(e.target.value))}
-                  className="w-full text-sm font-bold p-2 rounded-xl border border-slate-300 bg-white text-center"
+                  min="1"
+                  max="10"
+                  value={rpeScore}
+                  onChange={(e) => setRpeScore(e.target.value)}
+                  className="w-full text-xs p-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:outline-none focus:border-indigo-500"
                 />
               </div>
             </div>
-            <p className="text-[10px] text-slate-400">
-              เป้าหมายที่แนะนำ: 7-8 ชั่วโมงต่อคืน เพื่อให้กล้ามเนื้อซ่อมแซมได้เต็มที่
-            </p>
-          </div>
 
-          {/* Coach Sleep Advice */}
-          <div className="bg-indigo-50 p-3 rounded-2xl border border-indigo-100 flex items-start gap-2">
-            <Sparkles className="w-4 h-4 text-indigo-600 mt-0.5 shrink-0" />
-            <p className="text-[11px] text-indigo-900 leading-relaxed">
-              {hours > 0 ? (
-                <span>
-                  "บันทึกเวลานอน <strong>{hours} ชม. {minutes} นาที</strong> {hours >= 7 ? "ถือว่าเพียงพอ ร่างกายซ่อมแซมเส้นใยกล้ามเนื้อได้ดี พร้อมสำหรับการฝึกครับ" : "ควรหาเวลาพักผ่อนเพิ่ม เพื่อให้ร่างกายฟื้นตัวได้เต็มที่ครับ"}"
-                </span>
-              ) : (
-                <span>
-                  "บันทึกเวลาการนอนหลับของคุณ เพื่อให้โค้ช AI ประเมินความพร้อมของร่างกายและปรับความหนักของโปรแกรมให้เหมาะสมครับ"
-                </span>
-              )}
-            </p>
-          </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-bold text-slate-800 block mb-1">
+                  จำนวนก้าวเดินวันนี้ (ก้าว)
+                </label>
+                <input
+                  type="number"
+                  value={steps}
+                  onChange={(e) => setSteps(e.target.value)}
+                  className="w-full text-xs p-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-800 block mb-1">
+                  อัตราผันแปรหัวใจ HRV (ms)
+                </label>
+                <input
+                  type="number"
+                  value={hrv}
+                  onChange={(e) => setHrv(e.target.value)}
+                  className="w-full text-xs p-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="submit"
+                className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
+              >
+                <span>บันทึกและคำนวณ Readiness ใหม่อัตโนมัติ</span>
+              </button>
+            </div>
+          </form>
         </div>
 
         {/* Footer */}
-        <div className="p-4 bg-slate-50 border-t border-slate-200 flex gap-2">
+        <div className="p-3 bg-slate-50 border-t border-slate-200 flex justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold rounded-2xl text-xs transition-colors"
+            className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs transition-colors"
           >
-            ยกเลิก
-          </button>
-          <button
-            id="save-sleep-btn"
-            onClick={handleSave}
-            className="flex-1 py-2.5 bg-indigo-900 hover:bg-indigo-800 text-white font-bold rounded-2xl text-xs transition-all shadow-md flex items-center justify-center gap-2"
-          >
-            บันทึกการนอนหลับ
+            ปิด
           </button>
         </div>
       </div>
