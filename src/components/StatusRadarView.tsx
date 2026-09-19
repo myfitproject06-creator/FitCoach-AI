@@ -27,12 +27,11 @@ export const StatusRadarView: React.FC<StatusRadarViewProps> = ({
   const center = 100;
   const maxR = 70;
   const numAxes = 5;
-
   const labels = [
     { key: "STR", name: "ความแข็งแรง", val: status.strength },
-    { key: "END", name: "ความอึด", val: status.endurance },
-    { key: "MOB", name: "ความคล่องตัว", val: status.mobility },
-    { key: "VIT", name: "พลังชีวิต", val: status.vitality },
+    { key: "END", name: "ความทนทาน", val: status.endurance },
+    { key: "MOB", name: "ความยืดหยุ่น", val: status.mobility },
+    { key: "VIT", name: "ความสดชื่น", val: status.vitality },
     { key: "REC", name: "การฟื้นตัว", val: status.recovery },
   ];
 
@@ -65,21 +64,20 @@ export const StatusRadarView: React.FC<StatusRadarViewProps> = ({
                 PERSONAL FITNESS STATUS
               </span>
               <span className="w-1 h-1 bg-slate-600 rounded-full" />
-              <span className="text-[11px] text-slate-400">{profile.name}</span>
+              <span className="text-[11px] text-slate-400">{profile.name || "ผู้ใช้งานใหม่"}</span>
             </div>
             <h2 className="text-xl font-black text-white mt-0.5 tracking-tight flex items-center gap-2">
               Level {status.level}
               <span className="text-xs bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-500/30 font-bold">
-                Rank {status.rank}
+                Rank {status.rank || "Bronze"}
               </span>
             </h2>
           </div>
-
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 p-[2px] shadow-lg">
             <div className="w-full h-full bg-slate-950 rounded-[14px] flex flex-col items-center justify-center">
               <span className="text-[10px] text-slate-400 font-bold">RANK</span>
               <span className="text-lg font-black text-emerald-400 leading-none">
-                {status.rank}
+                {status.rank || "B"}
               </span>
             </div>
           </div>
@@ -88,19 +86,19 @@ export const StatusRadarView: React.FC<StatusRadarViewProps> = ({
         {/* XP Progress Bar */}
         <div className="mt-4 pt-3 border-t border-slate-800">
           <div className="flex justify-between text-xs text-slate-400 mb-1.5 font-medium">
-            <span>สะสมประสบการณ์ (XP):</span>
+            <span>ค่าประสบการณ์ (XP):</span>
             <span className="text-slate-200">
-              <strong>{status.xp.toLocaleString()}</strong> / {status.nextLevelXp.toLocaleString()} XP
+              <strong>{status.xp.toLocaleString()}</strong> / {status.nextLevelXp > 0 ? status.nextLevelXp.toLocaleString() : 0} XP
             </span>
           </div>
           <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
             <div
               className="bg-gradient-to-r from-emerald-500 to-teal-400 h-full rounded-full transition-all duration-700"
-              style={{ width: `${(status.xp / status.nextLevelXp) * 100}%` }}
+              style={{ width: `${status.nextLevelXp > 0 ? Math.min(100, (status.xp / status.nextLevelXp) * 100) : 0}%` }}
             />
           </div>
           <p className="text-[10px] text-slate-500 mt-1">
-            *Level สะท้อนประสบการณ์และวินัยระยะยาว (ไม่มีวันลดลง)
+            *Level จะเพิ่มขึ้นเมื่อคุณทำตามโปรแกรมฝึกสำเร็จและส่งการบ้านต่อเนื่อง
           </p>
         </div>
       </div>
@@ -113,11 +111,11 @@ export const StatusRadarView: React.FC<StatusRadarViewProps> = ({
               5-DIMENSION ATTRIBUTES
             </span>
             <h3 className="text-sm font-bold text-slate-900">
-              สมรรถภาพร่างกาย 5 มิติ
+              กราฟเรดาร์สมรรถภาพร่างกาย
             </h3>
           </div>
           <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-semibold">
-            ภาพรวมสมดุล
+            อัปเดตแบบเรียลไทม์
           </span>
         </div>
 
@@ -208,13 +206,13 @@ export const StatusRadarView: React.FC<StatusRadarViewProps> = ({
         <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex items-center gap-1.5 text-orange-600 mb-1">
             <Flame className="w-4 h-4 fill-orange-500" />
-            <span className="text-[11px] font-bold uppercase">ความต่อเนื่อง</span>
+            <span className="text-[11px] font-bold uppercase">โมเมนตัม</span>
           </div>
           <p className="text-lg font-black text-slate-900">
             {status.momentumDays} วัน
           </p>
           <p className="text-[10px] text-slate-400">
-            โมเมนตัม {status.trainingMomentum}%
+            ความต่อเนื่อง {status.trainingMomentum}%
           </p>
         </div>
 
@@ -222,13 +220,13 @@ export const StatusRadarView: React.FC<StatusRadarViewProps> = ({
         <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex items-center gap-1.5 text-emerald-600 mb-1">
             <CheckCircle2 className="w-4 h-4" />
-            <span className="text-[11px] font-bold uppercase">ทำตามแผน</span>
+            <span className="text-[11px] font-bold uppercase">ความสม่ำเสมอ</span>
           </div>
           <p className="text-lg font-black text-slate-900">
             {status.programAdherence}%
           </p>
           <p className="text-[10px] text-slate-400">
-            ความสม่ำเสมอสัปดาห์นี้
+            ปฏิบัติตามแผนได้ตามเป้า
           </p>
         </div>
 
@@ -236,7 +234,7 @@ export const StatusRadarView: React.FC<StatusRadarViewProps> = ({
         <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex items-center gap-1.5 text-indigo-600 mb-1">
             <Activity className="w-4 h-4" />
-            <span className="text-[11px] font-bold uppercase">สภาพร่างกาย</span>
+            <span className="text-[11px] font-bold uppercase">ความพร้อม</span>
           </div>
           <p className="text-lg font-black text-slate-900">
             {status.condition}%
@@ -262,14 +260,13 @@ export const StatusRadarView: React.FC<StatusRadarViewProps> = ({
               WEEKLY REVIEW
             </span>
             <h4 className="text-sm font-bold text-white">
-              รายงานสรุปประจำสัปดาห์ (9 - 15 มิ.ย.)
+              รายงานผลลัพธ์รายสัปดาห์ (Weekly Report)
             </h4>
             <p className="text-[11px] text-slate-300">
-              วิเคราะห์ความก้าวหน้า จุดเด่น และสิ่งที่ควรปรับปรุง
+              วิเคราะห์จุดเด่น ข้อควรปรับ และความก้าวหน้า
             </p>
           </div>
         </div>
-
         <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center group-hover:translate-x-1 transition-transform">
           <ArrowUpRight className="w-4 h-4 text-white" />
         </div>

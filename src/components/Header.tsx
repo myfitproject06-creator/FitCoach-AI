@@ -6,6 +6,11 @@ import { PWAInstallButton } from "./PWAInstallButton";
 interface HeaderProps {
   profile: UserProfile;
   status: FitnessStatus;
+  sessionUser?: {
+    userId?: string;
+    displayName?: string;
+    pictureUrl?: string;
+  } | null;
   onOpenLine: () => void;
   onOpenOnboarding: () => void;
   onOpenRichMenuStudio?: () => void;
@@ -16,6 +21,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   profile,
   status,
+  sessionUser,
   onOpenLine,
   onOpenOnboarding,
   onOpenRichMenuStudio,
@@ -29,21 +35,31 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex items-center gap-3">
           <button
             onClick={onOpenOnboarding}
-            title="แก้ไขเป้าหมาย / ทำแบบประเมินใหม่"
+            title="แก้ไขโปรไฟล์ / แบบสอบถาม"
             className="relative group focus:outline-none"
           >
-            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 p-[2px] transition-transform group-hover:scale-105">
-              <img
-                src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80"
-                alt={profile.name}
-                className="w-full h-full rounded-full object-cover"
-              />
+            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 p-[2px] transition-transform group-hover:scale-105 flex items-center justify-center overflow-hidden">
+              {sessionUser?.pictureUrl ? (
+                <img
+                  src={sessionUser.pictureUrl}
+                  alt={sessionUser.displayName || profile.name}
+                  className="w-full h-full rounded-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
+              ) : profile.name ? (
+                <div className="w-full h-full rounded-full bg-slate-800 text-emerald-400 font-bold text-sm flex items-center justify-center">
+                  {profile.name.charAt(0).toUpperCase()}
+                </div>
+              ) : (
+                <div className="w-full h-full rounded-full bg-slate-800 text-slate-300 font-bold text-xs flex items-center justify-center">
+                  FC
+                </div>
+              )}
             </div>
             <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-slate-900 flex items-center justify-center">
               <span className="w-1.5 h-1.5 bg-white rounded-full"></span>
             </div>
           </button>
-
           <div>
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-slate-400 font-medium">FitCoach AI</span>
@@ -52,7 +68,7 @@ export const Header: React.FC<HeaderProps> = ({
               </span>
             </div>
             <h1 className="text-sm font-semibold text-slate-100 flex items-center gap-1">
-              สวัสดีครับ, {profile.name} 👋
+              สวัสดี, {sessionUser?.displayName || profile.name || "คุณ"}
             </h1>
           </div>
         </div>
@@ -73,7 +89,7 @@ export const Header: React.FC<HeaderProps> = ({
           {onOpenGoogleHealth && (
             <button
               onClick={onOpenGoogleHealth}
-              title="ซิงค์ข้อมูลก้าวเดิน & การนอนจาก Google Health (Google Fit)"
+              title="ซิงค์ Google Health (Google Fit)"
               className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-semibold px-2.5 py-1.5 rounded-full border border-slate-700 transition-all active:scale-95"
             >
               <Activity className={`w-3.5 h-3.5 ${isGoogleHealthConnected ? "text-teal-400" : "text-slate-400"}`} />
@@ -88,7 +104,7 @@ export const Header: React.FC<HeaderProps> = ({
           {onOpenRichMenuStudio && (
             <button
               onClick={onOpenRichMenuStudio}
-              title="ออกแบบ & ดูสเปก LINE Rich Menu (2500x1686 px)"
+              title="ออกแบบ LINE Rich Menu (2500x1686 px)"
               className="hidden sm:flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-semibold px-2.5 py-1.5 rounded-full border border-slate-700 transition-all active:scale-95"
             >
               <LayoutGrid className="w-3.5 h-3.5 text-[#06C755]" />

@@ -1,286 +1,271 @@
 import React, { useState } from "react";
 import {
   X,
-  Layers,
   Calendar,
-  Utensils,
-  Moon,
-  Flame,
-  Dumbbell,
+  Layers,
+  Sparkles,
+  ChevronRight,
+  TrendingUp,
+  Target,
   CheckCircle2,
   Clock,
-  Droplets,
-  Sparkles,
+  Dumbbell,
+  Shield,
+  Zap,
 } from "lucide-react";
-import { Plan3MonthsData, WorkoutPlan } from "../types";
+import { UserProfile } from "../types";
 
 interface Plan3MonthsModalProps {
-  plan: Plan3MonthsData;
-  workout: WorkoutPlan;
+  isOpen: boolean;
   onClose: () => void;
-  onStartWorkout: () => void;
+  profile: UserProfile;
 }
 
 export const Plan3MonthsModal: React.FC<Plan3MonthsModalProps> = ({
-  plan,
-  workout,
+  isOpen,
   onClose,
-  onStartWorkout,
+  profile,
 }) => {
-  const [activeTab, setActiveTab] = useState<"roadmap" | "daily" | "meals" | "recovery">("roadmap");
+  const [activeMonth, setActiveMonth] = useState<1 | 2 | 3>(1);
+
+  if (!isOpen) return null;
+
+  const phases = [
+    {
+      month: 1,
+      name: "เดือนที่ 1: Foundation & Neuromuscular Adaptation",
+      subtitle: "สร้างฐานกำลัง ปรับฟอร์มท่า และความเคยชินระบบประสาท",
+      badge: "เดือนปัจจุบัน (กำลังดำเนินการ)",
+      badgeColor: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+      description: "เน้นท่าฝึกหลัก (Compound Movements) เพื่อให้ระบบประสาทสั่งการกล้ามเนื้อได้เต็มประสิทธิภาพ ปรับสมดุลข้อต่อ และสร้างวินัยความสม่ำเสมอ",
+      targetRPE: "RPE 6 - 7.5 (เหลือแรง 2-3 ครั้ง)",
+      weeklyFrequency: `${profile.daysPerWeek} วัน/สัปดาห์ (Upper / Lower / Full Body)`,
+      cardio: "Zone 2 Cardio 30 นาที 2 ครั้ง/สัปดาห์ เพื่อเพิ่ม Mitochondrial Density",
+      milestones: [
+        "ฟอร์มท่าสควอช และเพรสถูกต้อง 100% ไม่ปวดหลังส่วนล่าง",
+        "น้ำหนักตัวและรอบเอวเริ่มกระชับขึ้น 1-2 ซม.",
+        "ระบบการนอนเข้าที่ เฉลี่ย 7.5 ชั่วโมงขึ้นไป",
+      ],
+      sampleWeeklySplit: [
+        { day: "Day 1", workout: "Upper Body Hypertrophy (Chest/Back/Arms)", sets: "14 sets" },
+        { day: "Day 2", workout: "Lower Body Foundation (Quads/Glutes/Core)", sets: "12 sets" },
+        { day: "Day 3", workout: "Active Recovery & Mobility Flow", sets: "20 min" },
+        { day: "Day 4", workout: "Upper Body Power & Pull Focus", sets: "14 sets" },
+        { day: "Day 5", workout: "Lower Body & Posterior Chain (Hamstrings/Calves)", sets: "12 sets" },
+        { day: "Day 6-7", workout: "Rest & Outdoor Low-intensity Activity", sets: "Rest" },
+      ],
+    },
+    {
+      month: 2,
+      name: "เดือนที่ 2: Hypertrophy & Volume Progressive Overload",
+      subtitle: "เพิ่มปริมาณเซ็ต โฟกัสการฉีกขาดของเส้นใยเพื่อสร้างขนาด",
+      badge: "ระยะถัดไป (เดือนหน้า)",
+      badgeColor: "bg-teal-500/20 text-teal-300 border-teal-500/30",
+      description: "เพิ่ม Training Volume ต่อกลุ่มกล้ามเนื้อเป็น 14-18 เซ็ตต่อสัปดาห์ เพิ่ม Time Under Tension (TUT) เพื่อกระตุ้นการเจริญเติบโตของกล้ามเนื้ออย่างชัดเจน",
+      targetRPE: "RPE 7.5 - 8.5 (เข้มข้นขึ้น ใกล้เคียงจุดล้า)",
+      weeklyFrequency: `${profile.daysPerWeek} วัน/สัปดาห์ (Push / Pull / Legs Split)`,
+      cardio: "HIIT สลับ Zone 2 อย่างละ 1 เซสชั่น เพื่อเร่งการเผาผลาญไขมันสะสม",
+      milestones: [
+        "เพิ่มน้ำหนักดัมเบลและบาร์เบลขึ้น 5-10% จากเดือนแรก",
+        "มวลกล้ามเนื้อลายชัดเจนขึ้น เส้นเลือดเริ่มปรากฏ (Vascularity)",
+        "ความจุปอดและหัวใจ (VO2 Max) ดีขึ้น ไม่เหนื่อยง่าย",
+      ],
+      sampleWeeklySplit: [
+        { day: "Day 1", workout: "Push Day (Chest, Shoulders, Triceps)", sets: "16 sets" },
+        { day: "Day 2", workout: "Pull Day (Back, Lats, Biceps, Rear Delts)", sets: "16 sets" },
+        { day: "Day 3", workout: "Legs & Core Volume (Squat, Lunge, Planks)", sets: "15 sets" },
+        { day: "Day 4", workout: "Rest / Light Stretch", sets: "Rest" },
+        { day: "Day 5", workout: "Upper Body Density & Drop-sets", sets: "15 sets" },
+        { day: "Day 6", workout: "Lower Body Power & HIIT Finisher", sets: "14 sets" },
+        { day: "Day 7", workout: "Full Sleep & Recovery Day", sets: "Rest" },
+      ],
+    },
+    {
+      month: 3,
+      name: "เดือนที่ 3: Peak Conditioning & Body Recomposition",
+      subtitle: "คงมวลกล้ามเนื้อ รีดไขมันส่วนเกิน รูปร่างคมชัดที่สุด",
+      badge: "ระยะเป้าหมายสูงสุด (เดือนที่ 3)",
+      badgeColor: "bg-amber-500/20 text-amber-300 border-amber-500/30",
+      description: "ผสมผสานความหนักระดับสูงสุดและการคุมอาหารแบบ Carb Cycling รักษากล้ามเนื้อพร้อมรีดไขมันใต้ผิวหนัง เพื่อให้เห็นลายกล้ามเนื้อชัดเจนที่สุด",
+      targetRPE: "RPE 8.5 - 9.5 พร้อม Deload Week ในสัปดาห์สุดท้าย",
+      weeklyFrequency: `${profile.daysPerWeek} วัน/สัปดาห์ (Specialized Aesthetic Split)`,
+      cardio: "Fast-paced Incline Walk 30 นาที 3 ครั้ง/สัปดาห์",
+      milestones: [
+        "เปอร์เซ็นต์ไขมันในร่างกายลดลงตามเป้าหมาย (ประมาณ 2-4%)",
+        "สัดส่วน V-Shape ชัดเจน หน้าท้องกระชับ แข็งแรงขึ้นอย่างเห็นได้ชัด",
+        "สร้าง Habit สุขภาพถาวร พร้อมส่งต่อไปยังปีถัดไป",
+      ],
+      sampleWeeklySplit: [
+        { day: "Day 1", workout: "Chest & Back Antagonist Supersets", sets: "16 sets" },
+        { day: "Day 2", workout: "Legs Shred & Glute Hypertrophy", sets: "14 sets" },
+        { day: "Day 3", workout: "Shoulders & Arms Aesthetic Focus", sets: "15 sets" },
+        { day: "Day 4", workout: "Cardio & Core Endurance Conditioning", sets: "35 min" },
+        { day: "Day 5", workout: "Full Body Heavy Compound Strength", sets: "12 sets" },
+        { day: "Day 6", workout: "Active Longevity Yoga / Mobility", sets: "30 min" },
+        { day: "Day 7", workout: "Final Assessment & Photo Check-in", sets: "Check-in" },
+      ],
+    },
+  ];
+
+  const currentPhase = phases[activeMonth - 1];
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl h-[92vh] sm:h-[85vh] flex flex-col overflow-hidden shadow-2xl animate-in slide-in-from-bottom duration-300">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-3 sm:p-6 animate-in fade-in duration-200">
+      <div className="w-full max-w-2xl max-h-[92vh] rounded-3xl bg-slate-900 border border-slate-700 shadow-2xl overflow-hidden flex flex-col text-white">
         {/* Header */}
-        <div className="bg-gradient-to-r from-emerald-700 via-teal-700 to-slate-900 text-white p-4 sm:p-5 flex items-center justify-between shrink-0">
-          <div>
-            <div className="flex items-center gap-1.5 text-xs text-emerald-300 font-semibold uppercase tracking-wider mb-1">
-              <Sparkles className="w-3.5 h-3.5" />
-              {plan.totalDuration || `${plan.phases.length} เดือน`} Transformation Blueprint
+        <div className="p-4 sm:p-5 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-slate-950 flex items-center justify-center font-bold shadow-md shadow-emerald-500/20">
+              <Calendar className="w-5 h-5" />
             </div>
-            <h3 className="text-base sm:text-lg font-bold">
-              {plan.goalName || `แผนการเปลี่ยนแปลง ${plan.totalDuration || `${plan.phases.length} เดือน`}`}
-            </h3>
-            <p className="text-xs text-emerald-100/90 mt-0.5">
-              ระยะเวลา {plan.totalDuration} • ดูแลโดย FitCoach AI
-            </p>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-white">
+                  แผนแม่บทฟิตเนส 3 เดือน (Periodization Blueprint)
+                </h3>
+                <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded-full border border-emerald-500/30">
+                  MACROCYCLE
+                </span>
+              </div>
+              <p className="text-xs text-slate-400">
+                วางแผนตามหลักวิทยาศาสตร์การกีฬา 12 สัปดาห์เพื่อผลลัพธ์ยั่งยืนสำหรับคุณ {profile.name}
+              </p>
+            </div>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors text-white"
+            className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="grid grid-cols-4 gap-1 p-2 bg-slate-100 border-b border-slate-200 text-xs font-semibold shrink-0">
-          <button
-            onClick={() => setActiveTab("roadmap")}
-            className={`py-2 px-1 rounded-xl flex items-center justify-center gap-1.5 transition-all ${
-              activeTab === "roadmap"
-                ? "bg-white text-emerald-700 shadow-xs"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5" />
-            <span>Roadmap</span>
-          </button>
-          <button
-            onClick={() => setActiveTab("daily")}
-            className={`py-2 px-1 rounded-xl flex items-center justify-center gap-1.5 transition-all ${
-              activeTab === "daily"
-                ? "bg-white text-emerald-700 shadow-xs"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            <Calendar className="w-3.5 h-3.5" />
-            <span>ตาราง 7 วัน</span>
-          </button>
-          <button
-            onClick={() => setActiveTab("meals")}
-            className={`py-2 px-1 rounded-xl flex items-center justify-center gap-1.5 transition-all ${
-              activeTab === "meals"
-                ? "bg-white text-emerald-700 shadow-xs"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            <Utensils className="w-3.5 h-3.5" />
-            <span>อาหาร</span>
-          </button>
-          <button
-            onClick={() => setActiveTab("recovery")}
-            className={`py-2 px-1 rounded-xl flex items-center justify-center gap-1.5 transition-all ${
-              activeTab === "recovery"
-                ? "bg-white text-emerald-700 shadow-xs"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            <Moon className="w-3.5 h-3.5" />
-            <span>พักผ่อน</span>
-          </button>
+        {/* Phase Navigation Tabs */}
+        <div className="bg-slate-950/80 px-4 py-2 border-b border-slate-800 flex gap-2">
+          {phases.map((p) => (
+            <button
+              key={p.month}
+              onClick={() => setActiveMonth(p.month as any)}
+              className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                activeMonth === p.month
+                  ? "bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20"
+                  : "bg-slate-800/80 text-slate-400 hover:text-white hover:bg-slate-800"
+              }`}
+            >
+              <span>เดือนที่ {p.month}</span>
+              <span className="text-[10px] opacity-75 hidden sm:inline">
+                ({p.month === 1 ? "ปรับตัว" : p.month === 2 ? "สร้างกล้าม" : "คมชัด"})
+              </span>
+            </button>
+          ))}
         </div>
 
-        {/* Tab Content Body */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
-          {/* TAB 1: ROADMAP */}
-          {activeTab === "roadmap" && (
-            <div className="space-y-3.5 animate-in fade-in duration-200">
-              <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-3.5 text-xs text-emerald-900 space-y-1">
-                <span className="font-bold flex items-center gap-1.5 text-emerald-800">
-                  <Flame className="w-4 h-4 text-emerald-600" />
-                  กลยุทธ์การฝึก {plan.totalDuration} ({plan.phases.length} เฟสต่อเนื่อง)
-                </span>
-                <p className="text-emerald-700 text-[11px] leading-relaxed">
-                  แผนนี้เน้นการสร้างสรีระแบบ {plan.goalName || "Lean Athletic V-Taper"} ผ่าน {plan.phases.length} ช่วงการพัฒนาตามกรอบเวลา {plan.totalDuration} เพื่อให้ได้ผลลัพธ์ชัดเจนและรักษากล้ามเนื้อไว้ได้อย่างถาวร
-                </p>
-              </div>
-
-              {plan.phases.map((phase) => (
-                <div
-                  key={phase.month}
-                  className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs space-y-2 hover:border-emerald-200 transition-colors"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-800 flex items-center gap-2">
-                      <span className="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xs font-bold shadow-xs">
-                        {phase.month}
-                      </span>
-                      {phase.title}
-                    </span>
-                    <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100">
-                      สัปดาห์ที่ {(phase.month - 1) * 4 + 1} - {phase.month * 4}
-                    </span>
-                  </div>
-
-                  <p className="text-xs text-slate-600 pl-8 leading-relaxed">
-                    {phase.focus}
-                  </p>
-
-                  <div className="flex flex-wrap gap-2 pl-8 pt-1">
-                    <span className="text-[11px] bg-amber-50 text-amber-800 border border-amber-100 px-2 py-0.5 rounded-lg font-medium flex items-center gap-1">
-                      🔥 แคลอรีเป้าหมาย: <strong className="font-bold">{phase.calories}</strong>
-                    </span>
-                    <span className="text-[11px] bg-blue-50 text-blue-800 border border-blue-100 px-2 py-0.5 rounded-lg font-medium flex items-center gap-1">
-                      🥩 โปรตีน: <strong className="font-bold">{phase.protein}</strong>
-                    </span>
-                  </div>
-                </div>
-              ))}
+        {/* Content Body */}
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-5 flex-1">
+          {/* Active Month Header */}
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${currentPhase.badgeColor}`}>
+                {currentPhase.badge}
+              </span>
+              <span className="text-xs text-slate-400 font-mono">สัปดาห์ที่ {(activeMonth - 1) * 4 + 1} - {activeMonth * 4}</span>
             </div>
-          )}
+            <h4 className="text-base font-bold text-white pt-1">
+              {currentPhase.name}
+            </h4>
+            <p className="text-xs text-emerald-300 font-medium">
+              {currentPhase.subtitle}
+            </p>
+            <p className="text-xs text-slate-300 leading-relaxed pt-1">
+              {currentPhase.description}
+            </p>
+          </div>
 
-          {/* TAB 2: DAILY SCHEDULE 7 วัน */}
-          {activeTab === "daily" && (
-            <div className="space-y-2.5 animate-in fade-in duration-200">
-              <div className="text-xs text-slate-500 font-medium">
-                ตารางประจำสัปดาห์สำหรับการจัดสรรเวลาในแต่ละวัน:
-              </div>
+          {/* Key Parameters Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <div className="bg-slate-800/70 p-3 rounded-2xl border border-slate-700/80">
+              <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">
+                ระดับความหนักเป้าหมาย
+              </span>
+              <span className="text-xs font-bold text-emerald-400 mt-1 block">
+                {currentPhase.targetRPE}
+              </span>
+            </div>
 
-              {plan.weeklySchedule.map((item, idx) => (
+            <div className="bg-slate-800/70 p-3 rounded-2xl border border-slate-700/80">
+              <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">
+                ความถี่และการแบ่งกลุ่ม
+              </span>
+              <span className="text-xs font-bold text-teal-300 mt-1 block">
+                {currentPhase.weeklyFrequency}
+              </span>
+            </div>
+
+            <div className="bg-slate-800/70 p-3 rounded-2xl border border-slate-700/80">
+              <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">
+                กลยุทธ์คาร์ดิโอ (Cardio)
+              </span>
+              <span className="text-xs font-bold text-amber-300 mt-1 block">
+                {currentPhase.cardio}
+              </span>
+            </div>
+          </div>
+
+          {/* Sample Weekly Schedule Matrix */}
+          <div className="space-y-2">
+            <span className="text-xs font-bold text-slate-300 block flex items-center gap-1.5">
+              <Dumbbell className="w-3.5 h-3.5 text-emerald-400" />
+              โครงสร้างตารางฝึกตัวอย่างประจำสัปดาห์ (Weekly Matrix):
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {currentPhase.sampleWeeklySplit.map((item, idx) => (
                 <div
                   key={idx}
-                  className="flex items-center justify-between p-3 rounded-2xl bg-white border border-slate-200/90 shadow-xs hover:border-emerald-200 transition-colors"
+                  className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/70 flex items-center justify-between"
                 >
-                  <div className="space-y-0.5 pr-2">
-                    <div className="font-bold text-xs text-slate-900">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono font-bold bg-slate-700 text-slate-200 px-1.5 py-0.5 rounded">
                       {item.day}
-                    </div>
-                    <div className="text-xs text-slate-600">
-                      {item.activity}
-                    </div>
+                    </span>
+                    <span className="text-xs text-slate-200 font-medium">
+                      {item.workout}
+                    </span>
                   </div>
-                  <span
-                    className={`shrink-0 text-[10px] px-2.5 py-1 rounded-full font-bold border ${
-                      item.type === "workout"
-                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                        : item.type === "cardio"
-                        ? "bg-amber-50 text-amber-700 border-amber-200"
-                        : "bg-slate-100 text-slate-600 border-slate-200"
-                    }`}
-                  >
-                    {item.type === "workout"
-                      ? "เวทเทรนนิ่ง"
-                      : item.type === "cardio"
-                      ? "เบิร์นไขมัน"
-                      : "พักฟื้น 100%"}
+                  <span className="text-[10px] font-bold text-emerald-400 shrink-0 ml-2">
+                    {item.sets}
                   </span>
                 </div>
               ))}
             </div>
-          )}
+          </div>
 
-          {/* TAB 3: DAILY MEALS ข้อมูลอาหารรายวัน */}
-          {activeTab === "meals" && (
-            <div className="space-y-3 animate-in fade-in duration-200">
-              <div className="bg-blue-50 border border-blue-100 rounded-2xl p-3 text-xs text-blue-900 flex items-start gap-2.5">
-                <Droplets className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-                <div className="space-y-0.5">
-                  <span className="font-bold">กฎการเตรียมอาหาร (Daily Meal Prep Blueprint):</span>
-                  <p className="text-[11px] text-blue-800 leading-relaxed">
-                    เป้าหมายรายวันเฉลี่ย 2,150–2,250 kcal • โปรตีน 145–150g • ดื่มน้ำสะอาด 2.5–3 ลิตรต่อวัน
-                  </p>
-                </div>
-              </div>
-
-              {plan.dailyMeals.map((meal, idx) => (
-                <div
-                  key={idx}
-                  className="bg-white border border-slate-200/90 rounded-2xl p-3.5 shadow-xs space-y-1.5"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                      {meal.meal}
-                      <span className="text-[10px] font-normal text-slate-400">
-                        ({meal.time})
-                      </span>
-                    </span>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded-full font-bold">
-                        โปรตีน {meal.protein}
-                      </span>
-                      <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-100 px-2 py-0.5 rounded-full font-bold">
-                        {meal.calories}
-                      </span>
-                    </div>
-                  </div>
-                  <p className="text-xs text-slate-600 leading-relaxed pl-3.5">
-                    {meal.menu}
-                  </p>
+          {/* Milestones for this Month */}
+          <div className="space-y-2 bg-emerald-950/30 p-3.5 rounded-2xl border border-emerald-500/30">
+            <div className="flex items-center gap-1.5 text-emerald-300 font-bold text-xs">
+              <Target className="w-4 h-4" />
+              <span>เป้าหมายความสำเร็จของเดือนที่ {activeMonth} (Milestones):</span>
+            </div>
+            <div className="space-y-1.5">
+              {currentPhase.milestones.map((ms, idx) => (
+                <div key={idx} className="flex items-start gap-2 text-xs text-slate-200">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                  <span>{ms}</span>
                 </div>
               ))}
             </div>
-          )}
-
-          {/* TAB 4: RECOVERY กฎการพักผ่อน */}
-          {activeTab === "recovery" && (
-            <div className="space-y-3 animate-in fade-in duration-200">
-              <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-3.5 text-xs text-indigo-900 space-y-1">
-                <span className="font-bold flex items-center gap-1.5 text-indigo-800">
-                  <Moon className="w-4 h-4 text-indigo-600" />
-                  เสาหลักการฟื้นฟู (Muscle Recovery & Growth)
-                </span>
-                <p className="text-indigo-700 text-[11px] leading-relaxed">
-                  กล้ามเนื้อเติบโตและไขมันถูกเผาผลาญในเวลาที่คุณนอนหลับ การปฏิบัติตามกฎ 4 ข้อนี้จะช่วยเพิ่มประสิทธิภาพได้มากกว่า 40%
-                </p>
-              </div>
-
-              {plan.recoveryRules.map((rule, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-start gap-3 p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-xs"
-                >
-                  <div className="w-7 h-7 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold shrink-0">
-                    {idx + 1}
-                  </div>
-                  <p className="text-xs text-slate-700 leading-relaxed pt-0.5">
-                    {rule}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
+          </div>
         </div>
 
-        {/* Footer Actions */}
-        <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3 shrink-0">
+        {/* Footer */}
+        <div className="p-4 bg-slate-950 border-t border-slate-800 flex items-center justify-between">
+          <span className="text-xs text-slate-400">
+            แผนจะถูกอัปเดตอัตโนมัติทุกสัปดาห์ตามผลประเมินจริงของคุณ
+          </span>
           <button
             onClick={onClose}
-            className="flex-1 py-2.5 px-4 rounded-xl border border-slate-300 text-slate-700 text-xs font-bold hover:bg-slate-100 transition-colors"
+            className="px-5 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs transition-colors shadow-md cursor-pointer"
           >
             ปิดหน้าต่าง
-          </button>
-          <button
-            onClick={() => {
-              onClose();
-              onStartWorkout();
-            }}
-            className="flex-1 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5 active:scale-[0.98]"
-          >
-            <Dumbbell className="w-4 h-4" />
-            <span>เริ่มฝึกเซสชันวันนี้ 💪</span>
           </button>
         </div>
       </div>

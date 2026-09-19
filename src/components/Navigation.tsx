@@ -10,9 +10,9 @@ interface NavigationProps {
 
 export const Navigation: React.FC<NavigationProps> = ({ currentTab, onChangeTab }) => {
   const tabs = [
-    { id: "home" as NavTab, label: "หน้าแรก", icon: Home },
-    { id: "plan" as NavTab, label: "แผน", icon: Calendar },
-    { id: "progress" as NavTab, label: "สถิติ", icon: BarChart3 },
+    { id: "home" as NavTab, label: "หน้าหลัก", icon: Home },
+    { id: "plan" as NavTab, label: "โปรแกรม", icon: Calendar },
+    { id: "progress" as NavTab, label: "ความคืบหน้า", icon: BarChart3 },
     { id: "profile" as NavTab, label: "โปรไฟล์", icon: User },
   ];
 

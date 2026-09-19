@@ -68,12 +68,24 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onOpenRichMenuStudio,
   onOpenGoogleHealth,
 }) => {
+  const todayStr = new Intl.DateTimeFormat("th-TH", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(new Date());
+
   // Calculate completed daily tasks
+  const recoveryDone = Boolean((recovery.score ?? 0) > 0 || recovery.sleepHours > 0);
+  const workoutDone = Boolean(workout.isCompleted && workout.exercises.length > 0);
+  const nutritionDone = Boolean(nutrition.targetCalories > 0 && nutrition.currentCalories >= nutrition.targetCalories * 0.7);
+  const activityDone = Boolean(activity.targetSteps > 0 && activity.currentSteps >= activity.targetSteps);
+
   const tasks = [
-    { id: "recovery", label: "บันทึกการนอน", done: true },
-    { id: "workout", label: "ฝึก Upper Body", done: workout.isCompleted || false },
-    { id: "nutrition", label: "โภชนาการ", done: nutrition.currentCalories >= 1500 },
-    { id: "activity", label: "กิจกรรม 8,000 ก้าว", done: activity.currentSteps >= activity.targetSteps },
+    { id: "recovery", label: "การนอนหลับและการฟื้นตัว", done: recoveryDone },
+    { id: "workout", label: workout.titleTh || workout.title ? `การฝึก ${workout.titleTh || workout.title}` : "การฝึกประจำวัน", done: workoutDone },
+    { id: "nutrition", label: "สารอาหารและพลังงาน", done: nutritionDone },
+    { id: "activity", label: activity.targetSteps > 0 ? `ก้าวเดิน ${activity.targetSteps.toLocaleString()} ก้าว` : "ก้าวเดินประจำวัน", done: activityDone },
   ];
   const completedCount = tasks.filter((t) => t.done).length;
 
@@ -82,18 +94,18 @@ export const HomeView: React.FC<HomeViewProps> = ({
       {/* Date & Greeting Banner */}
       <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-center justify-between">
         <div>
-          <p className="text-xs font-medium text-slate-400">
-            วันพุธที่ 18 มิถุนายน 2568
+          <p className="text-xs font-medium text-slate-400 capitalize">
+            {todayStr}
           </p>
           <h2 className="text-lg font-bold text-slate-800 tracking-tight">
-            นี่คือแผนของคุณวันนี้
+            แผนประจำวันนี้
           </h2>
         </div>
         <div className="flex items-center gap-2">
           <div className="text-right">
-            <p className="text-[10px] text-slate-400 font-medium">ความพร้อมวันนี้</p>
+            <p className="text-[10px] text-slate-400 font-medium">ความพร้อมร่างกาย</p>
             <p className="text-xs font-bold text-emerald-600">
-              Condition {status.condition}% · ดี
+              Condition {status.condition}%
             </p>
           </div>
           <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-xs border border-emerald-200">
@@ -109,7 +121,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-300 flex items-center justify-center text-xs font-bold border border-emerald-500/30">
-                🕷️
+                🎯
               </span>
               <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">
                 ACTIVE TRANSFORMATION PLAN ({activePlan3Months.totalDuration})
@@ -119,25 +131,23 @@ export const HomeView: React.FC<HomeViewProps> = ({
               {activePlan3Months.totalDuration}
             </span>
           </div>
-
           <div>
             <h3 className="text-sm font-bold text-white">
               {activePlan3Months.goalName}
             </h3>
             <p className="text-xs text-slate-300 mt-0.5">
-              แผนการฝึกแบบ V-Taper, ตารางรายวัน 7 วัน, ข้อมูลโภชนาการ และเสาหลักการพักผ่อน
+              แผนสร้างสรีระ V-Taper, เสริมไหล่และอกบน ควบคุมไขมันตามเป้าหมาย
             </p>
           </div>
-
           <div className="pt-2 flex items-center justify-between border-t border-slate-800">
             <div className="text-[10px] text-slate-400">
-              <span className="text-emerald-400 font-semibold">{activePlan3Months.phases.length} เฟสหลัก</span> • {activePlan3Months.dailyMeals.length} มื้ออาหารต่อวัน
+              <span className="text-emerald-400 font-semibold">{activePlan3Months.phases.length} เฟส</span> • {activePlan3Months.dailyMeals.length} มื้อต่อวัน
             </div>
             <button
               onClick={onOpenPlan3Months}
               className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1 active:scale-95"
             >
-              <span>ดูแผนฉบับเต็ม ({activePlan3Months.totalDuration})</span>
+              <span>ดูแผนทั้งหมด ({activePlan3Months.totalDuration})</span>
               <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -165,7 +175,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
               }`}
             >
-              {accountability?.penaltyActive ? "🚨" : accountability?.status === "overdue" ? "⚠️" : "🛡️"}
+              {accountability?.penaltyActive ? "🚨" : accountability?.status === "overdue" ? "⚠️" : "⏱️"}
             </span>
             <div>
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300 block">
@@ -173,14 +183,13 @@ export const HomeView: React.FC<HomeViewProps> = ({
               </span>
               <h3 className="text-xs font-bold text-white">
                 {accountability?.penaltyActive
-                  ? `บทลงโทษทางวินัย (Strike ${accountability?.strikes || 3}/3)`
+                  ? `โดนบทลงโทษ (Strike ${accountability?.strikes || 3}/3)`
                   : accountability?.status === "overdue"
-                  ? "เลยเวลานัดซ้อมแล้ว! โค้ชกำลังติดตาม"
-                  : `มีนัดซ้อมเวลา ${accountability?.scheduledTime || "18:00"} น. (ตรงเวลา)`}
+                  ? "เลยเวลาออกกำลังกายที่นัดไว้!"
+                  : `นัดซ้อมเวลา ${accountability?.scheduledTime || "18:00"} น.`}
               </h3>
             </div>
           </div>
-
           <span
             className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold border ${
               accountability?.penaltyActive
@@ -197,29 +206,25 @@ export const HomeView: React.FC<HomeViewProps> = ({
               : "On Schedule"}
           </span>
         </div>
-
         {/* Message / context */}
         <p className="text-xs text-slate-200 mt-2 leading-relaxed">
           {accountability?.penaltyActive ? (
             <span>
-              🚨 คุณขาดการเข้าซ้อมตามโปรแกรมที่กำหนด! โค้ชออกบทลงโทษชดเชย:{" "}
+              บทลงโทษชดเชย:{" "}
               <strong className="text-rose-300">
-                {accountability.penaltyTask || "Burpees 15 ครั้ง หรือ Push-ups 25 ครั้ง"}
+                {accountability.penaltyTask || "Burpees 15 ครั้ง + Push-ups 25 ครั้ง"}
               </strong>
             </span>
           ) : accountability?.status === "overdue" ? (
             <span>
-              ⏰ เลยเวลา 18:00 น. มาแล้ว โค้ชจะส่งข้อความเตือนคุณเรื่อยๆ จนกว่าจะเริ่มซ้อม
-              หรือลงโทษหากขาดซ้อมครับ!
+              เลยเวลานัด 18:00 น. แล้ว โค้ชกำลังรอเช็คอิน หากติดธุระกดแจ้งโค้ชเพื่อปรับเวลาหรือลดเซ็ตได้ทันที
             </span>
           ) : (
             <span>
-              วันนี้มีซ้อม <strong>{workout.titleTh || workout.title}</strong> ตอน 18:00 น.
-              และส่งเมนูอาหารมาให้โค้ชคำนวณบันทึกในแอปได้ตลอดวันครับ
+              โปรแกรมวันนี้ <strong>{workout.titleTh || workout.title || "การฝึกประจำวัน"}</strong> นัดซ้อมเวลา {accountability?.scheduledTime || "18:00"} น. โค้ชจะทักเตือนทาง LINE ตามเวลาที่กำหนด
             </span>
           )}
         </p>
-
         {/* Actions & Scenario Simulation Bar */}
         <div className="mt-3 pt-2.5 border-t border-slate-700/60 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-1.5">
@@ -228,47 +233,43 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 onClick={onClearPenalty}
                 className="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-[11px] font-bold transition-all shadow-xs flex items-center gap-1"
               >
-                <span>ส่งการบ้านชดเชย</span>
+                <span>ส่งการบ้านบทลงโทษ</span>
               </button>
             ) : (
               <button
-                onClick={onOpenWorkout}
+                onClick={workout.exercises.length > 0 ? onOpenWorkout : onOpenAdapt}
                 className="px-3 py-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl text-[11px] font-bold transition-all shadow-xs flex items-center gap-1"
               >
                 <Dumbbell className="w-3 h-3" />
-                <span>เริ่มซ้อมทันที</span>
+                <span>{workout.exercises.length > 0 ? "เริ่มซ้อมทันที" : "สร้างโปรแกรมฝึก"}</span>
               </button>
             )}
-
             <button
               onClick={onOpenLine}
               className="px-2.5 py-1 bg-[#06C755] hover:bg-[#05b34c] text-white rounded-xl text-[11px] font-bold transition-colors flex items-center gap-1 shadow-xs"
             >
-              <span>เปิด LINE แชท</span>
+              <span>คุยกับโค้ช LINE</span>
               <ArrowRight className="w-3 h-3 text-white" />
             </button>
-
             {onOpenRichMenuStudio && (
               <button
                 onClick={onOpenRichMenuStudio}
                 className="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-emerald-300 hover:text-white rounded-xl text-[11px] font-semibold transition-colors flex items-center gap-1 border border-white/10"
-                title="เปิดเครื่องมือออกแบบและดาวน์โหลด LINE Rich Menu (2500x1686)"
+                title="เปิดเครื่องมือออกแบบ LINE Rich Menu (2500x1686)"
               >
-                <span>🎨 Rich Menu</span>
+                <span>สตูดิโอ Rich Menu</span>
               </button>
             )}
-
             {onOpenGoogleHealth && (
               <button
                 onClick={onOpenGoogleHealth}
                 className="px-2.5 py-1 bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 hover:text-white rounded-xl text-[11px] font-semibold transition-colors flex items-center gap-1 border border-teal-500/30"
-                title="ซิงค์ข้อมูลก้าวเดิน & การนอนจาก Google Health (Google Fit)"
+                title="ซิงค์ Google Health (Google Fit)"
               >
-                <span>❤️ Google Health</span>
+                <span>ซิงค์ Google Health</span>
               </button>
             )}
           </div>
-
           {/* Interactive Proactive Coach Scenario Triggers */}
           {onTriggerCoachScenario && (
             <div className="flex items-center gap-1 overflow-x-auto text-[10px]">
@@ -276,30 +277,30 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <button
                 onClick={() => onTriggerCoachScenario("18_00")}
                 className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-emerald-300 rounded-lg border border-slate-700 transition-colors whitespace-nowrap"
-                title="จำลองถึงเวลานัดซ้อม 18:00 น."
+                title="จำลองโค้ชทักเตือนเวลา 18:00 น."
               >
-                🕒 18:00 น.
+                🔔 เตือน 18:00
               </button>
               <button
                 onClick={() => onTriggerCoachScenario("overdue")}
                 className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-lg border border-slate-700 transition-colors whitespace-nowrap"
-                title="จำลองเลยเวลาซ้อม โค้ชตามจิก"
+                title="จำลองโค้ชตามจิกเมื่อเลยเวลา"
               >
-                ⚠️ ตามซ้อม
+                ⚠️ ตามตัวเมื่อสาย
               </button>
               <button
                 onClick={() => onTriggerCoachScenario("penalty")}
                 className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-rose-300 rounded-lg border border-slate-700 transition-colors whitespace-nowrap"
-                title="จำลองโดดซ้อม เริ่มบทลงโทษ"
+                title="จำลองสั่งบทลงโทษเมื่อโดดซ้อม"
               >
-                🚨 สั่งลงโทษ
+                🚨 สั่งบทลงโทษ
               </button>
               <button
                 onClick={() => onTriggerCoachScenario("meal_prompt")}
                 className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-teal-300 rounded-lg border border-slate-700 transition-colors whitespace-nowrap"
-                title="โค้ชทวงถามเมนูอาหารประจำวัน"
+                title="จำลองโค้ชทวงถามบันทึกมื้ออาหาร"
               >
-                🥗 ทวงอาหาร
+                🥗 ทวงถามมื้ออาหาร
               </button>
             </div>
           )}
@@ -309,7 +310,6 @@ export const HomeView: React.FC<HomeViewProps> = ({
       {/* AI Coach Daily Guidance Box */}
       <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white rounded-2xl p-4 shadow-md relative overflow-hidden">
         <div className="absolute right-0 top-0 translate-x-4 -translate-y-4 w-28 h-28 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
-
         <div className="flex items-start gap-3">
           <div className="w-9 h-9 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0 mt-0.5">
             <Sparkles className="w-4 h-4 text-emerald-400" />
@@ -317,7 +317,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <div className="flex-1">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">
-                คำแนะนำจากเทรนเนอร์วันนี้
+                คำแนะนำจากโค้ช AI วันนี้
               </span>
               <button
                 id="coach-line-checkin-btn"
@@ -330,21 +330,24 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <p className="text-xs text-slate-200 leading-relaxed mt-1">
               {workout.isAdapted ? (
                 <span>
-                  ⚡ <strong>ผมปรับแผนวันนี้ให้แล้ว:</strong> {workout.coachNote || "ลดความหนักลงเพื่อให้ร่างกายได้ฟื้นฟูโดยยังคงความต่อเนื่องครับ"}
+                  โค้ชปรับโปรแกรมให้แล้ว: <strong>สาเหตุ:</strong> {workout.coachNote || "ปรับตามความพร้อมของร่างกาย"}
+                </span>
+              ) : workout.titleTh || workout.title ? (
+                <span>
+                  "วันนี้เป็นวันเล่น <strong>{workout.titleTh || workout.title}</strong> เน้นโฟกัสจังหวะยืดและเกร็งกล้ามเนื้อ พักระหว่างเซ็ตตามคำแนะนำเพื่อประสิทธิภาพสูงสุดครับ"
                 </span>
               ) : (
                 <span>
-                  "วันนี้เป็น <strong>Upper Body</strong> เน้นกล้ามเนื้ออก ไหล่ และหลัง คุมจังหวะผ่อนน้ำหนักให้ช้า 2 วินาที หากรู้สึกเหนื่อยหรือมีเวลาน้อย บอกผมเพื่อปรับแผนได้เสมอนะครับ"
+                  "ยินดีต้อนรับสู่ FitCoach AI ครับ! เริ่มต้นทำแบบประเมินร่างกายเพื่อรับโปรแกรมฝึก โภชนาการ และการดูแลเฉพาะบุคคลได้ทันที"
                 </span>
               )}
             </p>
           </div>
         </div>
-
         {/* Quick button to adapt today's plan */}
         <div className="mt-3 pt-2.5 border-t border-slate-700/60 flex items-center justify-between">
           <span className="text-[11px] text-slate-400">
-            รู้สึกไม่พร้อม / มีเวลาจำกัด?
+            ร่างกายไม่พร้อม หรือเวลาน้อย?
           </span>
           <button
             id="adapt-workout-btn"
@@ -352,7 +355,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             className="flex items-center gap-1 text-[11px] font-semibold text-emerald-300 hover:text-emerald-200 bg-emerald-950/60 hover:bg-emerald-900/60 px-2.5 py-1 rounded-full border border-emerald-500/30 transition-colors"
           >
             <SlidersHorizontal className="w-3 h-3" />
-            <span>ปรับแผนวันนี้</span>
+            <span>ปรับโปรแกรมด่วน</span>
           </button>
         </div>
       </div>
@@ -364,7 +367,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             {completedCount}/{tasks.length}
           </div>
           <span className="text-xs font-semibold text-slate-700">
-            ความคืบหน้าประจำวัน ({completedCount} จาก {tasks.length} เสร็จแล้ว)
+            ภารกิจวันนี้ ({completedCount} จาก {tasks.length} สำเร็จ)
           </span>
         </div>
         <div className="flex gap-1.5">
@@ -392,58 +395,69 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </div>
             <div>
               <span className="text-[11px] font-bold uppercase tracking-wider text-orange-600">
-                TRAIN · การฝึก
+                TRAIN (ฝึกซ้อม)
               </span>
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
-                {workout.titleTh}
+                {workout.titleTh || workout.title || "โปรแกรมออกกำลังกาย"}
                 {workout.isAdapted && (
                   <span className="text-[10px] bg-amber-100 text-amber-800 font-semibold px-1.5 py-0.5 rounded-full">
-                    ปรับเบาลง
+                    ปรับให้เบาลงแล้ว
                   </span>
                 )}
               </h3>
             </div>
           </div>
-
           <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
             <span className="flex items-center gap-1">
               <Clock className="w-3.5 h-3.5 text-slate-400" />
-              {workout.durationMinutes} นาที
+              {workout.durationMinutes > 0 ? `${workout.durationMinutes} นาที` : "- นาที"}
             </span>
             <span className="w-1 h-1 bg-slate-300 rounded-full" />
-            <span>ระดับ{workout.intensity}</span>
+            <span>ระดับ {workout.intensity || "-"}</span>
           </div>
         </div>
 
         {/* Workout Preview thumbnail & details */}
-        <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100 mb-3">
-          <img
-            src="https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?auto=format&fit=crop&w=300&q=80"
-            alt="Workout preview"
-            className="w-14 h-14 rounded-lg object-cover shrink-0"
-          />
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold text-slate-800 truncate">
-              {workout.exercises[0]?.name || "Bench Press"} และอีก {workout.exercises.length - 1} ท่า
+        {workout.exercises.length === 0 ? (
+          <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-3 text-center space-y-1.5">
+            <div className="w-10 h-10 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center mx-auto">
+              <Dumbbell className="w-5 h-5" />
+            </div>
+            <p className="text-xs font-bold text-slate-800">ยังไม่มีโปรแกรมการฝึกสำหรับวันนี้</p>
+            <p className="text-[11px] text-slate-500">
+              สร้างแผนการฝึกเฉพาะบุคคลเพื่อเริ่มต้นการออกกำลังกายตามเป้าหมาย
             </p>
-            <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">
-              เป้าหมาย: สร้างกล้ามเนื้ออก หัวไหล่ และหลัง
-            </p>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-[10px] bg-slate-200/80 text-slate-700 px-1.5 py-0.5 rounded font-medium">
-                {workout.exercises.length} ท่าฝึก
-              </span>
-              <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-medium">
-                {workout.isCompleted ? "ฝึกเสร็จแล้ว 🎉" : "พร้อมฝึก"}
-              </span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100 mb-3">
+            <img
+              src="https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?auto=format&fit=crop&w=300&q=80"
+              alt="Workout preview"
+              className="w-14 h-14 rounded-lg object-cover shrink-0"
+            />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-slate-800 truncate">
+                {workout.exercises[0]?.name} {workout.exercises.length > 1 ? `และอีก ${workout.exercises.length - 1} ท่า` : ""}
+              </p>
+              <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">
+                {workout.focusArea || "เน้นสร้างกล้ามเนื้อและรูปร่าง"}
+              </p>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-[10px] bg-slate-200/80 text-slate-700 px-1.5 py-0.5 rounded font-medium">
+                  {workout.exercises.length} ท่าฝึก
+                </span>
+                <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-medium">
+                  {workout.isCompleted ? "เสร็จแล้ว" : "พร้อมฝึก"}
+                </span>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Action Button */}
         <button
           id="start-workout-main-btn"
-          onClick={onOpenWorkout}
+          onClick={workout.exercises.length > 0 ? onOpenWorkout : onOpenAdapt}
           className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-sm ${
             workout.isCompleted
               ? "bg-slate-100 text-slate-700 hover:bg-slate-200"
@@ -453,12 +467,17 @@ export const HomeView: React.FC<HomeViewProps> = ({
           {workout.isCompleted ? (
             <>
               <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              <span>ดูสรุปผลการฝึก</span>
+              <span>ดูสรุปการฝึกที่เสร็จแล้ว</span>
             </>
-          ) : (
+          ) : workout.exercises.length > 0 ? (
             <>
               <span>เริ่มออกกำลังกาย</span>
               <ArrowRight className="w-4 h-4" />
+            </>
+          ) : (
+            <>
+              <Sparkles className="w-4 h-4 text-emerald-400" />
+              <span>ตั้งค่าหรือปรับโปรแกรมฝึก</span>
             </>
           )}
         </button>
@@ -477,39 +496,37 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </div>
             <div>
               <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-600">
-                EAT · โภชนาการ
+                EAT (โภชนาการ)
               </span>
               <h3 className="text-sm font-bold text-slate-900">
-                {nutrition.currentCalories.toLocaleString()} / {nutrition.targetCalories.toLocaleString()} kcal
+                {nutrition.currentCalories.toLocaleString()} / {nutrition.targetCalories > 0 ? `${nutrition.targetCalories.toLocaleString()} kcal` : "- kcal"}
               </h3>
             </div>
           </div>
           <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
         </div>
-
         {/* Progress bar */}
         <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden my-2">
           <div
             className="bg-emerald-500 h-full rounded-full transition-all duration-500"
             style={{
-              width: `${Math.min(100, (nutrition.currentCalories / nutrition.targetCalories) * 100)}%`,
+              width: `${nutrition.targetCalories > 0 ? Math.min(100, (nutrition.currentCalories / nutrition.targetCalories) * 100) : 0}%`,
             }}
           />
         </div>
-
         {/* Macros summary */}
         <div className="flex items-center justify-between text-xs pt-1 text-slate-600">
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-emerald-500" />
-            <span>โปรตีน: <strong>{nutrition.currentProtein} / {nutrition.targetProtein}g</strong></span>
+            <span>โปรตีน: <strong>{nutrition.currentProtein} / {nutrition.targetProtein > 0 ? `${nutrition.targetProtein}g` : "-"}</strong></span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-amber-500" />
-            <span>คาร์บ: <strong>{nutrition.currentCarbs} / {nutrition.targetCarbs}g</strong></span>
+            <span>คาร์บ: <strong>{nutrition.currentCarbs} / {nutrition.targetCarbs > 0 ? `${nutrition.targetCarbs}g` : "-"}</strong></span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-rose-400" />
-            <span>ไขมัน: <strong>{nutrition.currentFat} / {nutrition.targetFat}g</strong></span>
+            <span>ไขมัน: <strong>{nutrition.currentFat} / {nutrition.targetFat > 0 ? `${nutrition.targetFat}g` : "-"}</strong></span>
           </div>
         </div>
       </div>
@@ -529,25 +546,29 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <div className="flex items-center gap-1">
               {recovery.isFromGoogleHealth && (
                 <span className="text-[9px] font-bold text-teal-700 bg-teal-50 border border-teal-200 px-1.5 py-0.5 rounded-md">
-                  ✓ Google Fit
+                  Google Fit
                 </span>
               )}
               <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full">
-                {recovery.quality}
+                {recovery.quality || "ยังไม่มีข้อมูล"}
               </span>
             </div>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-600">
-              RECOVER · การนอน
+              RECOVER (การฟื้นตัว)
             </span>
             <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
           </div>
           <h4 className="text-base font-bold text-slate-900 mt-0.5">
-            {recovery.sleepHours} ชม. {recovery.sleepMinutes} นาที
+            {recovery.sleepHours > 0 || recovery.sleepMinutes > 0
+              ? `${recovery.sleepHours} ชม. ${recovery.sleepMinutes} นาที`
+              : "ยังไม่ได้บันทึก"}
           </h4>
           <p className="text-[11px] text-slate-400 mt-0.5">
-            เป้าหมาย: {recovery.targetSleepHours} {recovery.sleepStart && `(${recovery.sleepStart} - ${recovery.sleepEnd})`}
+            {recovery.sleepHours > 0 || recovery.sleepMinutes > 0
+              ? `เป้าหมาย: ${recovery.targetSleepHours} ${recovery.sleepStart ? `(${recovery.sleepStart} - ${recovery.sleepEnd})` : ""}`
+              : "แตะเพื่อบันทึกการนอนหรือซิงค์ข้อมูล"}
           </p>
         </div>
 
@@ -566,21 +587,21 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <div className="flex items-center gap-1">
               {activity.isFromGoogleHealth && (
                 <span className="text-[9px] font-bold text-teal-700 bg-teal-50 border border-teal-200 px-1.5 py-0.5 rounded-md">
-                  ✓ Google Fit
+                  Google Fit
                 </span>
               )}
               <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full">
-                {Math.round((activity.currentSteps / activity.targetSteps) * 100)}%
+                {activity.targetSteps > 0 ? `${Math.round((activity.currentSteps / activity.targetSteps) * 100)}%` : "0%"}
               </span>
             </div>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-teal-600">
-              ACTIVITY · ก้าวเดิน
+              ACTIVITY (การเคลื่อนไหว)
             </span>
             {onOpenGoogleHealth && (
               <span className="text-[10px] text-teal-600 font-semibold group-hover:underline flex items-center gap-0.5">
-                ซิงค์ข้อมูล →
+                ซิงค์
               </span>
             )}
           </div>
@@ -588,7 +609,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             {activity.currentSteps.toLocaleString()} ก้าว
           </h4>
           <p className="text-[11px] text-slate-400 mt-0.5">
-            เป้าหมาย: {activity.targetSteps.toLocaleString()} ก้าว ({activity.distanceKm} กม.)
+            เป้าหมาย: {activity.targetSteps > 0 ? `${activity.targetSteps.toLocaleString()} ก้าว` : "- ก้าว"} ({activity.distanceKm} กม.)
           </p>
         </div>
       </div>

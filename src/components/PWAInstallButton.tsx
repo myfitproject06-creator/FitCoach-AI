@@ -6,17 +6,17 @@ export const PWAInstallButton: React.FC = () => {
   const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
   const [showIOSGuide, setShowIOSGuide] = useState(false);
 
-  // ถ้าเปิดในโหมดติดตั้งแล้ว (Standalone) ไม่ต้องแสดงปุ่ม
+  // ติดตั้งแล้ว (Standalone) ไม่ต้องแสดงปุ่ม
   if (isInstalled) {
     return null;
   }
 
-  // บน Chrome / Android / Desktop เมื่อมี Event beforeinstallprompt
+  // กรณีเบราว์เซอร์รองรับ Chrome / Android / Desktop (มี Event beforeinstallprompt)
   if (isInstallable) {
     return (
       <button
         onClick={install}
-        title="ติดตั้ง FitCoach AI ลงหน้าจอมือถือของคุณ"
+        title="ติดตั้งแอพ FitCoach AI บนอุปกรณ์ของคุณ"
         className="flex items-center gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white text-xs font-bold px-2.5 py-1.5 rounded-full shadow-md transition-all active:scale-95 cursor-pointer"
       >
         <Download className="w-3.5 h-3.5 animate-bounce" />
@@ -26,7 +26,7 @@ export const PWAInstallButton: React.FC = () => {
     );
   }
 
-  // บน iOS Safari (WebKit ไม่รองรับ beforeinstallprompt แต่สามารถแนะแนวทาง Add to Home Screen ได้)
+  // กรณี iOS Safari (WebKit ไม่มี beforeinstallprompt ต้องใช้ Add to Home Screen)
   if (isIOS) {
     return (
       <>
@@ -36,7 +36,7 @@ export const PWAInstallButton: React.FC = () => {
           className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium px-2.5 py-1.5 rounded-full border border-slate-700 transition-all active:scale-95 cursor-pointer"
         >
           <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
-          <span className="hidden sm:inline">เพิ่มลงหน้าจอโฮม</span>
+          <span className="hidden sm:inline">ติดตั้งบน iOS</span>
           <span className="sm:hidden">ติดตั้ง</span>
         </button>
 
@@ -64,7 +64,7 @@ export const PWAInstallButton: React.FC = () => {
                     1
                   </span>
                   <p>
-                    กดที่ปุ่ม <strong>แชร์ (Share)</strong>{" "}
+                    กดปุ่ม <strong>แชร์ (Share)</strong>{" "}
                     <span className="inline-block px-1.5 py-0.5 bg-slate-700 rounded text-[10px] font-mono">⎋</span>{" "}
                     ที่แถบด้านล่างของ Safari
                   </p>
@@ -75,7 +75,7 @@ export const PWAInstallButton: React.FC = () => {
                     2
                   </span>
                   <p>
-                    เลื่อนลงมาแล้วเลือก{" "}
+                    เลื่อนลงแล้วเลือก{" "}
                     <strong className="text-emerald-300">"เพิ่มไปยังหน้าจอโฮม" (Add to Home Screen)</strong>
                   </p>
                 </div>
@@ -85,7 +85,7 @@ export const PWAInstallButton: React.FC = () => {
                     3
                   </span>
                   <p>
-                    กดปุ่ม <strong>"เพิ่ม" (Add)</strong> ที่มุมขวาบน จะได้ไอคอน FitCoach AI เปิดเต็มหน้าจอเหมือนแอปจริง
+                    กด <strong>"เพิ่ม" (Add)</strong> มุมขวาบน เพื่อเริ่มใช้งาน FitCoach AI แบบเต็มหน้าจอ
                   </p>
                 </div>
               </div>
