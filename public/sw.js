@@ -1,8 +1,5 @@
-// Service Worker สำหรับ FitCoach AI (PWA แบบเบา)
-// จัดการแคชเฉพาะไฟล์ static และหน้าเว็บหลัก โดยไม่ง้อเน็ตเวิร์กเมื่อออฟไลน์
+// Service Worker สำหรับ FitCoach AI (PWA Cache & Offline Static)
 const CACHE_NAME = "fitcoach-cache-v1";
-
-// รายการไฟล์ตั้งต้นที่ต้องแคชล่วงหน้า
 const PRECACHE_ASSETS = [
   "/",
   "/index.html",
@@ -15,17 +12,16 @@ const PRECACHE_ASSETS = [
   "/icons/icon-maskable-512.png"
 ];
 
-// 1. ขั้นตอน Install: แคชไฟล์หลัก และข้ามการรอ (skipWaiting) ทันทีเพื่ออัปเดตเวอร์ชันใหม่
+// 1. Lifecycle Install: Precache assets (skipWaiting)
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      // แคชไฟล์เริ่มต้นอย่างปลอดภัย
       return cache.addAll(PRECACHE_ASSETS);
     }).then(() => self.skipWaiting())
   );
 });
 
-// 2. ขั้นตอน Activate: ลบแคชเวอร์ชันเก่าออกอัตโนมัติ และเข้าควบคุมหน้าเว็บทันที (clients.claim)
+// 2. Lifecycle Activate: Cleanup old caches (clients.claim)
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
@@ -40,28 +36,27 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-// 3. จัดการ Fetch Request:
-// ข้อกำหนดสำคัญ: ห้ามแคชและห้ามดักคำขอ /api/* และ /webhook/* เด็ดขาด
+// 3. Fetch Request: Bypass /api/* and /webhook/*
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   const url = new URL(req.url);
 
-  // ข้ามคำขอที่ไม่ใช่ GET (เช่น POST, PUT, DELETE)
+  // ข้าม request ที่ไม่ใช่ GET
   if (req.method !== "GET") {
     return;
   }
 
-  // ห้ามแคชและห้ามดัก API และ LINE Webhook เด็ดขาด ปล่อยให้ส่งตรงไปที่เซิร์ฟเวอร์
+  // ข้าม API และ LINE Webhook
   if (url.pathname.startsWith("/api") || url.pathname.startsWith("/webhook")) {
     return;
   }
 
-  // ถ้าเป็นโดเมนภายนอก (Third-party) ปล่อยให้เน็ตเวิร์กจัดการตามปกติ
+  // ข้าม third-party requests
   if (url.origin !== self.location.origin) {
     return;
   }
 
-  // สำหรับหน้าหลัก (Navigation Request): ใช้กลยุทธ์ Network-First เพื่อให้ได้เวอร์ชันล่าสุดเสมอ ถ้าเน็ตหลุดจึงดึงจากแคช
+  // สำหรับ Navigation Request: Network-First พร้อม Offline Fallback
   if (req.mode === "navigate") {
     event.respondWith(
       fetch(req)
@@ -80,7 +75,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // สำหรับไฟล์ Static (JS, CSS, รูปภาพ, ฟอนต์): ใช้ Cache-First พร้อมอัปเดตแคชในเบื้องหลัง (Stale-While-Revalidate)
+  // สำหรับ Static assets (JS, CSS, Images): Stale-While-Revalidate
   event.respondWith(
     caches.match(req).then((cachedResponse) => {
       const fetchPromise = fetch(req).then((networkResponse) => {
