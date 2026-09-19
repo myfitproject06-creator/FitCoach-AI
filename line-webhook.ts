@@ -1,444 +1,153 @@
+// line-webhook.ts - จัดการ Webhook สำหรับ LINE Bot โค้ชส่วนตัว
+import { Request, Response } from "express";
 import crypto from "crypto";
-import type { Express, Request, Response } from "express";
+import { getUserData } from "./db";
+import { generateCoachResponse } from "./coach-ai";
 
-const LINE_REPLY_URL = "https://api.line.me/v2/bot/message/reply";
-const LINE_PUSH_URL = "https://api.line.me/v2/bot/message/push";
-
-function verifySignature(rawBody: Buffer | undefined, signature: string | undefined, secret: string) {
-  if (!rawBody || !signature) return false;
-  const expected = crypto.createHmac("sha256", secret).update(rawBody).digest("base64");
-  const a = Buffer.from(expected);
-  const b = Buffer.from(signature);
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
+interface LineEvent {
+  type: string;
+  replyToken?: string;
+  source?: {
+    userId?: string;
+    type?: string;
+  };
+  message?: {
+    type: string;
+    id: string;
+    text?: string;
+  };
+  timestamp?: number;
 }
 
-function buildQuickReply(quickActions?: string[]) {
-  if (!quickActions?.length) return undefined;
-  return {
-    items: quickActions.slice(0, 13).map((label) => ({
-      type: "action",
-      action: {
-        type: "message",
-        label: label.slice(0, 20),
-        text: label,
-      },
-    })),
-  };
+interface LineWebhookBody {
+  destination?: string;
+  events?: LineEvent[];
 }
 
 /**
- * Builds an authentic, green-themed LINE Flex Message Bubble for workout plans
- * Compatible with LINE Flex Message Simulator and Messaging API specs.
+ * ตรวจสอบความถูกต้องของ LINE Webhook Signature ด้วย LINE_CHANNEL_SECRET
  */
-export function buildWorkoutFlexBubble(card: any, appUrl: string) {
-  if (!card) return null;
-
-  const plan = card.workoutPlan || {};
-  const rawTitle = card.title || plan.titleTh || plan.title || "โปรแกรมการฝึก FitCoach";
-  const title = String(rawTitle).replace(/\*\*/g, "").slice(0, 40);
-
-  const durationText = String(
-    card.duration || (plan.durationMinutes ? `${plan.durationMinutes} นาที` : "20-45 นาที")
-  ).replace(/\*\*/g, "").slice(0, 30);
-
-  const detailsText = String(
-    card.details || plan.coachNote || "โปรแกรมออกกำลังกายปรับแต่งโดย FitCoach AI"
-  ).replace(/\*\*/g, "").slice(0, 100);
-
-  const exercises = Array.isArray(plan.exercises) ? plan.exercises.slice(0, 6) : [];
-
-  // Construct exercise list rows
-  const exerciseComponents: any[] = [];
-
-  if (exercises.length > 0) {
-    exerciseComponents.push({
-      type: "text",
-      text: "ท่าฝึกประจำโปรแกรม:",
-      size: "xs",
-      color: "#64748B",
-      weight: "bold",
-      margin: "md",
-    });
-
-    exercises.forEach((ex: any, idx: number) => {
-      const exName = String(ex.nameTh || ex.name || `ท่าที่ ${idx + 1}`).replace(/\*\*/g, "");
-      const setsReps = `${ex.sets || 3} เซ็ต × ${ex.reps || "10-12 ครั้ง"}${
-        ex.suggestedWeight ? ` • ${ex.suggestedWeight}` : ""
-      }`;
-
-      exerciseComponents.push({
-        type: "box",
-        layout: "horizontal",
-        spacing: "sm",
-        margin: "sm",
-        alignItems: "center",
-        contents: [
-          {
-            type: "box",
-            layout: "vertical",
-            width: "22px",
-            contents: [
-              {
-                type: "text",
-                text: `${idx + 1}.`,
-                size: "xs",
-                color: "#06C755",
-                weight: "bold",
-              },
-            ],
-          },
-          {
-            type: "box",
-            layout: "vertical",
-            flex: 1,
-            contents: [
-              {
-                type: "text",
-                text: exName,
-                size: "sm",
-                weight: "bold",
-                color: "#1E293B",
-                wrap: true,
-              },
-              {
-                type: "text",
-                text: setsReps,
-                size: "xs",
-                color: "#64748B",
-              },
-            ],
-          },
-        ],
-      });
-    });
+export function verifyLineSignature(rawBody: Buffer | string, signature: string, channelSecret: string): boolean {
+  if (!channelSecret) {
+    console.warn("[LINE Webhook] ไม่ได้ตั้งค่า LINE_CHANNEL_SECRET - ข้ามการตรวจลายเซ็นสำหรับ Dev/Testing");
+    return true;
   }
+  if (!signature) return false;
 
-  // Format App URL for the primary button
-  let safeAppUrl = (appUrl || "https://fitcoach-ai.onrender.com").trim();
-  if (!safeAppUrl.startsWith("http://") && !safeAppUrl.startsWith("https://")) {
-    safeAppUrl = `https://${safeAppUrl}`;
-  }
+  const expectedSignature = crypto
+    .createHmac("SHA256", channelSecret)
+    .update(typeof rawBody === "string" ? Buffer.from(rawBody, "utf-8") : rawBody)
+    .digest("base64");
 
-  return {
-    type: "bubble",
-    size: "mega",
-    header: {
-      type: "box",
-      layout: "vertical",
-      backgroundColor: "#06C755",
-      paddingAll: "18px",
-      contents: [
-        {
-          type: "box",
-          layout: "horizontal",
-          contents: [
-            {
-              type: "text",
-              text: "FITCOACH WORKOUT",
-              color: "#ECFDF5",
-              size: "xxs",
-              weight: "bold",
-              flex: 1,
-            },
-            {
-              type: "text",
-              text: durationText,
-              color: "#FFFFFF",
-              size: "xs",
-              align: "end",
-              weight: "bold",
-            },
-          ],
-        },
-        {
-          type: "text",
-          text: title,
-          color: "#FFFFFF",
-          weight: "bold",
-          size: "lg",
-          wrap: true,
-          margin: "sm",
-        },
-      ],
-    },
-    body: {
-      type: "box",
-      layout: "vertical",
-      paddingAll: "16px",
-      contents: [
-        {
-          type: "text",
-          text: detailsText,
-          size: "xs",
-          color: "#475569",
-          wrap: true,
-        },
-        ...exerciseComponents,
-      ],
-    },
-    footer: {
-      type: "box",
-      layout: "vertical",
-      spacing: "sm",
-      paddingAll: "14px",
-      contents: [
-        {
-          type: "button",
-          style: "primary",
-          color: "#06C755",
-          height: "sm",
-          action: {
-            type: "uri",
-            label: "เปิดใน FitCoach App",
-            uri: safeAppUrl,
-          },
-        },
-        {
-          type: "button",
-          style: "secondary",
-          height: "sm",
-          action: {
-            type: "message",
-            label: "เริ่มซ้อมเลย 💪",
-            text: "เริ่มซ้อมโปรแกรมนี้เลยครับ",
-          },
-        },
-      ],
-    },
-  };
+  return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature));
 }
 
 /**
- * Maps postback data (e.g. action=workout_today) to a user query
+ * ส่งข้อความตอบกลับผู้ใช้ผ่าน LINE Messaging API
  */
-export function mapPostbackToText(data: string): string {
-  if (!data) return "ขอตารางซ้อมวันนี้หน่อยครับ";
-
-  // Try parsing JSON postback
-  if (data.startsWith("{") && data.endsWith("}")) {
-    try {
-      const parsed = JSON.parse(data);
-      if (parsed.text) return parsed.text;
-      if (parsed.action) return mapActionKeyToText(parsed.action);
-    } catch {}
-  }
-
-  // Parse URL search params e.g. action=workout_today
-  if (data.includes("action=")) {
-    try {
-      const params = new URLSearchParams(data);
-      const action = params.get("action");
-      if (action) return mapActionKeyToText(action);
-    } catch {}
-  }
-
-  return mapActionKeyToText(data);
-}
-
-function mapActionKeyToText(action: string): string {
-  switch (action) {
-    case "workout_today":
-    case "today_workout":
-      return "ขอตารางซ้อมวันนี้หน่อยครับ อยากเริ่มซ้อมแล้ว";
-    case "log_food":
-      return "บันทึกอาหารวันนี้ให้หน่อยครับ";
-    case "plan_3months":
-      return "จัดแผน 3 เดือนหุ่น Tom Holland ให้หน่อยครับ อยากรู้ตารางซ้อมและอาหาร";
-    case "discipline_check":
-    case "check_in":
-      return "เช็คสถานะวินัยและการนัดหมายซ้อมของวันนี้หน่อยครับ";
-    case "adapt_plan":
-      return "วันนี้รู้สึกเหนื่อยมาก ช่วยปรับแผนการฝึกให้เบาลงหน่อยครับ";
-    case "weekly_report":
-      return "สรุปผลการออกกำลังกายสัปดาห์นี้";
-    default:
-      return action;
-  }
-}
-
-/**
- * Sends response to LINE with automatic Flex Message handling and plain text fallback
- */
-async function replyToLine(
-  token: string,
-  replyToken: string,
-  text: string,
-  card: any,
-  quickActions?: string[],
-  userId?: string
-) {
-  // Strip markdown ** and limit text length
-  const cleanText = (text || "").replace(/\*\*/g, "").slice(0, 5000);
-  const textMessage: any = {
-    type: "text",
-    text: cleanText || "ผมพร้อมดูแลการออกกำลังกายของคุณครับ!",
-  };
-
-  const appUrl = process.env.APP_URL || "https://fitcoach-ai.onrender.com";
-  let flexBubble: any = null;
-
-  if (card) {
-    try {
-      flexBubble = buildWorkoutFlexBubble(card, appUrl);
-    } catch (err) {
-      console.error("Error constructing workout Flex Bubble:", err);
-    }
-  }
-
-  // Primary attempt: text + flex card if available
-  const messagesToSend: any[] = [];
-
-  if (flexBubble) {
-    // If we have a flex card, attach text first, then flex card
-    if (cleanText) {
-      messagesToSend.push(textMessage);
-    }
-
-    const flexTitle = String(card.title || card.workoutPlan?.titleTh || "แผนการฝึก FitCoach")
-      .replace(/\*\*/g, "")
-      .slice(0, 30);
-
-    const flexMsg: any = {
-      type: "flex",
-      altText: `🏋️ ${flexTitle}`,
-      contents: flexBubble,
-    };
-
-    // Attach quick reply to the last message
-    if (quickActions?.length) {
-      flexMsg.quickReply = buildQuickReply(quickActions);
-    }
-
-    messagesToSend.push(flexMsg);
-  } else {
-    // No flex card, send text with quick replies
-    if (quickActions?.length) {
-      textMessage.quickReply = buildQuickReply(quickActions);
-    }
-    messagesToSend.push(textMessage);
+async function replyLineMessage(replyToken: string, text: string, accessToken: string): Promise<boolean> {
+  if (!accessToken) {
+    console.warn("[LINE Webhook] ไม่พบ LINE_CHANNEL_ACCESS_TOKEN - ไม่สามารถส่งข้อความกลับทาง LINE ได้");
+    return false;
   }
 
   try {
-    const res = await fetch(LINE_REPLY_URL, {
+    const response = await fetch("https://api.line.me/v2/bot/message/reply", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${accessToken}`,
       },
-      body: JSON.stringify({ replyToken, messages: messagesToSend }),
+      body: JSON.stringify({
+        replyToken,
+        messages: [
+          {
+            type: "text",
+            text,
+          },
+        ],
+      }),
     });
 
-    if (res.ok) {
-      return;
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error("[LINE Webhook] ส่งข้อความตอบกลับล้มเหลว:", response.status, errText);
+      return false;
     }
 
-    const errBody = await res.text();
-    console.error("LINE reply API error status:", res.status, errBody);
-
-    // Fallback requirement: If Flex Message failed, fallback to plain text only
-    if (flexBubble) {
-      console.warn("Attempting text-only fallback reply due to Flex Message error...");
-      if (quickActions?.length) {
-        textMessage.quickReply = buildQuickReply(quickActions);
-      }
-
-      // If push to user is possible (since replyToken might be consumed on bad requests)
-      if (userId) {
-        await fetch(LINE_PUSH_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ to: userId, messages: [textMessage] }),
-        });
-      }
-    }
+    return true;
   } catch (err) {
-    console.error("Failed to send LINE reply:", err);
+    console.error("[LINE Webhook] เกิดข้อผิดพลาดในการเรียก LINE Reply API:", err);
+    return false;
   }
 }
 
-export function registerLineWebhook(app: Express, port: number) {
-  app.post("/webhook", async (req: Request, res: Response) => {
-    const secret = process.env.LINE_CHANNEL_SECRET;
-    const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+/**
+ * Handler สำหรับ Route /webhook (POST)
+ */
+export async function lineWebhookHandler(req: Request, res: Response) {
+  const channelSecret = process.env.LINE_CHANNEL_SECRET || "";
+  const channelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN || "";
+  const signature = req.get("x-line-signature") || "";
 
-    if (!secret || !token) {
-      console.error("Missing LINE_CHANNEL_SECRET or LINE_CHANNEL_ACCESS_TOKEN");
-      return res.sendStatus(500);
-    }
+  // 1. ตรวจสอบ Signature (ใช้ rawBody ที่บันทึกไว้ใน middleware)
+  const rawBody = (req as any).rawBody || JSON.stringify(req.body);
+  if (channelSecret && !verifyLineSignature(rawBody, signature, channelSecret)) {
+    console.error("[LINE Webhook] Signature verification failed!");
+    return res.status(401).send("Invalid Signature");
+  }
 
-    if (!verifySignature((req as any).rawBody, req.get("x-line-signature"), secret)) {
-      console.error("Invalid LINE signature");
-      return res.sendStatus(401);
-    }
+  const body = req.body as LineWebhookBody;
+  const events = body?.events || [];
 
-    // Acknowledge LINE platform immediately with 200 OK
-    res.sendStatus(200);
+  console.log(`[LINE Webhook] ได้รับ ${events.length} event(s)`);
 
-    for (const event of req.body.events ?? []) {
-      const replyToken = event.replyToken;
-      const userId = event.source?.userId;
+  // ตอบกลับ 200 ทันทีตามข้อกำหนดของ LINE Webhook
+  res.status(200).send("OK");
 
-      // Handle Follow Event
-      if (event.type === "follow") {
-        await replyToLine(
-          token,
-          replyToken,
-          "สวัสดีครับ! ผมคือ FitCoach AI โค้ชส่วนตัวของคุณ 💪\n\nสามารถเลือกเมนูด้านล่าง หรือพิมพ์บอกผมได้ทันที เช่น \"ขอตารางซ้อมวันนี้\" หรือ \"กินข้าวมันไก่ไป 1 จาน\" ครับ!",
-          null,
-          ["เริ่ม Workout", "บันทึกอาหาร", "ดูแคลอรีวันนี้"],
-          userId
-        );
-        continue;
+  // 2. ดำเนินการประมวลผล event แบบ Asynchronous
+  for (const event of events) {
+    try {
+      if (event.type === "message" && event.message?.type === "text" && event.replyToken) {
+        const userId = event.source?.userId;
+        const userText = event.message.text || "";
+
+        if (!userId) {
+          console.warn("[LINE Webhook] ไม่พบ userId ใน event.source");
+          continue;
+        }
+
+        console.log(`[LINE Webhook] ข้อความจาก userId=${userId}: "${userText}"`);
+
+        // ดึงข้อมูลผู้ใช้จากฐานข้อมูลตาม LINE userId
+        const userData = await getUserData(userId);
+        const hasProfile = Boolean(userData?.profile?.name && userData.profile.name.trim().length > 0);
+
+        let replyText = "";
+
+        if (!hasProfile) {
+          // หากยังไม่มีข้อมูลฟิตเนส ให้บอทตอบชวนเปิดแอปเพื่อตั้งค่าโปรไฟล์
+          const host = req.get("host") || "localhost:3000";
+          const protocol = req.protocol === "https" || req.get("x-forwarded-proto") === "https" ? "https" : "http";
+          const appUrl = (process.env.APP_URL || `${protocol}://${host}`).replace(/\/$/, "");
+
+          replyText = `สวัสดีครับ! โค้ช FitCoach AI ยินดีต้อนรับครับ 🏋️‍♂️✨\n\nดูเหมือนว่าคุณยังไม่ได้ตั้งค่าโปรไฟล์และเป้าหมายสุขภาพส่วนบุคคล\n\n👉 กรุณาเปิดลิงก์ด้านล่างเพื่อทำแบบประเมินและรับโปรแกรมฝึกเฉพาะตัวคุณทันที:\n${appUrl}\n\nเมื่อตั้งค่าเสร็จแล้ว สามารถกลับมาปรึกษาโค้ชเรื่องอาหารและการออกกำลังกายผ่าน LINE แชทนี้ได้ตลอด 24 ชม. เลยครับ! 🎯`;
+        } else {
+          // หากมีโปรไฟล์แล้ว ส่งข้อมูลให้ Coach AI วิเคราะห์และตอบอย่างแม่นยำ
+          replyText = await generateCoachResponse(userText, {
+            userProfile: userData?.profile,
+            workoutPlan: userData?.workout,
+            fitnessStatus: userData?.status,
+            nutritionData: userData?.nutrition,
+            recoveryData: userData?.recovery,
+          });
+        }
+
+        // ส่งข้อความกลับหาผู้ใช้ใน LINE
+        await replyLineMessage(event.replyToken, replyText, channelAccessToken);
       }
-
-      // Determine user input from message or postback event
-      let userText = "";
-
-      if (event.type === "message" && event.message?.type === "text") {
-        userText = event.message.text;
-      } else if (event.type === "postback") {
-        const postbackData = event.postback?.data || "";
-        userText = mapPostbackToText(postbackData);
-        console.log(`Received LINE postback [${postbackData}] -> resolved to prompt: "${userText}"`);
-      } else {
-        continue;
-      }
-
-      try {
-        const r = await fetch(`http://127.0.0.1:${port}/api/ai/coach-chat`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            message: userText,
-            source: "line",
-            lineUserId: userId,
-          }),
-        });
-
-        const data: any = await r.json();
-
-        await replyToLine(
-          token,
-          replyToken,
-          data.reply ?? "ขออภัยครับ ระบบขัดข้องชั่วคราว",
-          data.card ?? null,
-          data.quickActions,
-          userId
-        );
-      } catch (err) {
-        console.error("Webhook message handling error:", err);
-        await replyToLine(
-          token,
-          replyToken,
-          "ขออภัยครับ ระบบขัดข้องชั่วคราว ลองใหม่อีกครั้งนะครับ",
-          null,
-          ["เริ่ม Workout", "บันทึกอาหาร", "ดูแคลอรีวันนี้"],
-          userId
-        );
-      }
+    } catch (err) {
+      console.error("[LINE Webhook] เกิดข้อผิดพลาดในการประมวลผล event:", err);
     }
-  });
+  }
 }
