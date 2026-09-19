@@ -3,13 +3,12 @@ import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 
-// Service Worker สำหรับ Production
+// Service Worker in Production
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker
       .register('/sw.js', { scope: '/' })
       .then((registration) => {
-        // อัปเดต Service Worker เมื่อมีเวอร์ชันใหม่
         registration.onupdatefound = () => {
           const installingWorker = registration.installing;
           if (installingWorker) {

@@ -18,16 +18,33 @@ export interface Exercise {
   targetMuscle?: string;
 }
 
+export interface WorkoutDay {
+  id: string;
+  dayName: string;
+  focus: string;
+  estimatedDurationMinutes?: number;
+  estimatedCalories?: number;
+  isCompleted?: boolean;
+  isRestDay?: boolean;
+  exercises: Exercise[];
+}
+
+export type ExerciseItem = Exercise;
+
 export interface WorkoutPlan {
   id: string;
   title?: string;
   titleTh?: string;
+  name?: string;
+  currentWeek?: number;
+  totalWeeks?: number;
   dayName?: string;
   focusArea?: string;
   durationMinutes: number;
   intensity: string;
   split?: string;
   exercises: Exercise[];
+  days?: WorkoutDay[];
   isCompleted?: boolean;
   isAdapted?: boolean;
   adaptationReason?: string;
@@ -68,10 +85,15 @@ export interface RecoveryData {
   targetSleepHours?: string;
   quality: string;
   score?: number;
+  readinessScore?: number;
+  sleepQualityScore?: number;
+  rpeScore?: number;
+  steps?: number;
+  hrvMs?: number;
   sleepStart?: string;
   sleepEnd?: string;
-  fatigueLevel?: "ต่ำ" | "ปานกลาง" | "สูง" | string;
-  muscleSoreness?: "ไม่มี" | "เล็กน้อย" | "ปานกลาง" | "ระบมมาก" | string;
+  fatigueLevel?: " " | " " | " " | string;
+  muscleSoreness?: " " | " " | " " | " " | string;
   restingHeartRate?: number;
   coachInsight?: string;
   isFromGoogleHealth?: boolean;
@@ -93,6 +115,13 @@ export interface FitnessStatus {
   level: number;
   xp: number;
   nextLevelXp: number;
+  currentLevel?: number;
+  currentExp?: number;
+  nextLevelExp?: number;
+  totalWorkoutsCompleted?: number;
+  totalCaloriesBurned?: number;
+  rankTitle?: string;
+  badges?: any[];
   rank: "S" | "A" | "B" | "C" | "D" | string;
   strength: number;    // STR
   endurance: number;   // END
@@ -110,6 +139,8 @@ export interface FitnessStatus {
 
 export interface UserProfile {
   name: string;
+  pictureUrl?: string;
+  userId?: string;
   goal: string;
   customGoalText?: string;
   primaryGoal?: string;
