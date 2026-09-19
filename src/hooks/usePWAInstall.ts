@@ -11,13 +11,13 @@ export function usePWAInstall() {
   const [isIOS, setIsIOS] = useState(false);
 
   useEffect(() => {
-    // ตรวจสอบว่าแอปเปิดในโหมด PWA Standalone อยู่แล้วหรือไม่
+    // เช็คว่ารันใน PWA Standalone หรือไม่
     const isStandalone =
       window.matchMedia("(display-mode: standalone)").matches ||
       (window.navigator as unknown as { standalone?: boolean }).standalone === true;
     setIsInstalled(isStandalone);
 
-    // ตรวจสอบว่าเป็นอุปกรณ์ iOS หรือไม่
+    // ตรวจสอบว่าเป็น iOS หรือไม่
     const userAgent = window.navigator.userAgent.toLowerCase();
     const isIOSDevice = /iphone|ipad|ipod/.test(userAgent);
     setIsIOS(isIOSDevice);
