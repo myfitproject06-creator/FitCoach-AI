@@ -16,6 +16,8 @@ import { WeeklyReportModal } from "./components/WeeklyReportModal";
 import { Plan3MonthsModal } from "./components/Plan3MonthsModal";
 import { LandingView } from "./components/LandingView";
 import { LineRichMenuStudioModal } from "./components/LineRichMenuStudioModal";
+import { GoogleHealthModal } from "./components/GoogleHealthModal";
+import { isGoogleFitConnected } from "./services/googleFitService";
 
 import {
   initialProfile,
@@ -65,8 +67,38 @@ export function App() {
   const [isWeeklyReportOpen, setIsWeeklyReportOpen] = useState(false);
   const [isPlan3MonthsModalOpen, setIsPlan3MonthsModalOpen] = useState(false);
   const [isRichMenuStudioOpen, setIsRichMenuStudioOpen] = useState(false);
+  const [isGoogleHealthModalOpen, setIsGoogleHealthModalOpen] = useState(false);
 
   // Handlers
+  const handleUpdateActivity = (updated: Partial<typeof activity>) => {
+    setActivity((prev) => ({ ...prev, ...updated }));
+  };
+
+  const handleAdaptWorkoutForSleep = (hours: number, minutes: number) => {
+    setWorkout((prev) => ({
+      ...prev,
+      isAdapted: true,
+      durationMinutes: Math.min(prev.durationMinutes, 30),
+      intensity: "ฟื้นฟู",
+      coachNote: `⚡ โค้ช AI ปรับแผนอัตโนมัติตามข้อมูล Google Health: เนื่องจากคุณนอนเพียง ${hours} ชม. ${minutes} น. ร่างกายมีความล้าสะสม จึงลดระดับความหนักและเน้นท่าที่เซฟข้อต่อ เพื่อป้องกันการบาดเจ็บครับ`,
+    }));
+
+    // Notify on LINE Chat
+    const now = new Date();
+    const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(
+      now.getMinutes()
+    ).padStart(2, "0")}`;
+    setLineMessages((prev) => [
+      ...prev,
+      {
+        id: `line-gfit-${Date.now()}`,
+        sender: "coach",
+        text: `🌙 โค้ชซิงค์ข้อมูลจาก Google Health พบว่าคุณนอนไป ${hours} ชม. ${minutes} น. ผมปรับโปรแกรมวันนี้เป็นระดับฟื้นฟู (RPE เบาลง) ให้เรียบร้อย เพื่อให้คุณได้ซ้อมอย่างต่อเนื่องโดยไม่เสี่ยงบาดเจ็บครับ 💪`,
+        timestamp: timeStr,
+      },
+    ]);
+  };
+
   const handleCompleteWorkout = (data: { rpe: number; feeling: any; notes: string }) => {
     setWorkout((prev) => ({
       ...prev,
@@ -565,6 +597,8 @@ export function App() {
         onOpenLine={() => setIsLineModalOpen(true)}
         onOpenOnboarding={() => setIsOnboardingModalOpen(true)}
         onOpenRichMenuStudio={() => setIsRichMenuStudioOpen(true)}
+        onOpenGoogleHealth={() => setIsGoogleHealthModalOpen(true)}
+        isGoogleHealthConnected={isGoogleFitConnected()}
       />
 
       {/* Main Container */}
@@ -586,6 +620,7 @@ export function App() {
             onOpenAdapt={() => setIsAdaptiveModalOpen(true)}
             onOpenLine={() => setIsLineModalOpen(true)}
             onOpenRichMenuStudio={() => setIsRichMenuStudioOpen(true)}
+            onOpenGoogleHealth={() => setIsGoogleHealthModalOpen(true)}
             onTriggerCoachScenario={handleTriggerCoachScenario}
             onClearPenalty={handleClearPenalty}
           />
@@ -665,6 +700,7 @@ export function App() {
           recovery={recovery}
           onClose={() => setIsRecoveryModalOpen(false)}
           onUpdateRecovery={handleUpdateRecovery}
+          onOpenGoogleHealth={() => setIsGoogleHealthModalOpen(true)}
         />
       )}
 
@@ -712,6 +748,18 @@ export function App() {
           accountability={accountability}
         />
       )}
+
+      {/* Google Health & Fit Sync Modal */}
+      <GoogleHealthModal
+        isOpen={isGoogleHealthModalOpen}
+        onClose={() => setIsGoogleHealthModalOpen(false)}
+        activity={activity}
+        recovery={recovery}
+        workout={workout}
+        onUpdateActivity={handleUpdateActivity}
+        onUpdateRecovery={handleUpdateRecovery}
+        onAdaptWorkoutForSleep={handleAdaptWorkoutForSleep}
+      />
 
       {/* 6. Onboarding Modal */}
       {isOnboardingModalOpen && (

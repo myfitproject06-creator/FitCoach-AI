@@ -14,12 +14,14 @@ interface RecoveryModalProps {
   recovery: RecoveryData;
   onClose: () => void;
   onUpdateRecovery: (updated: Partial<RecoveryData>) => void;
+  onOpenGoogleHealth?: () => void;
 }
 
 export const RecoveryModal: React.FC<RecoveryModalProps> = ({
   recovery,
   onClose,
   onUpdateRecovery,
+  onOpenGoogleHealth,
 }) => {
   const [hours, setHours] = useState(recovery.sleepHours);
   const [minutes, setMinutes] = useState(recovery.sleepMinutes);
@@ -56,6 +58,39 @@ export const RecoveryModal: React.FC<RecoveryModalProps> = ({
 
         {/* Content */}
         <div className="p-4 overflow-y-auto space-y-4">
+          {/* Google Health Sync Quick Banner */}
+          {onOpenGoogleHealth && (
+            <div className="bg-teal-50 border border-teal-200 rounded-2xl p-3 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-lg bg-teal-600 text-white flex items-center justify-center text-[10px] font-bold">
+                  G
+                </span>
+                <div>
+                  <span className="font-bold text-teal-950 block">
+                    {recovery.isFromGoogleHealth
+                      ? "ซิงค์จาก Google Health แล้ว"
+                      : "ต้องการดึงข้อมูลการนอนจริง?"}
+                  </span>
+                  <span className="text-[11px] text-teal-700">
+                    {recovery.isFromGoogleHealth
+                      ? `ดึงจาก Google Fit/สมาร์ทวอทช์ (${recovery.lastSyncedAt || "วันนี้"})`
+                      : "ดึงเวลานอนและหลับลึกจากนาฬิกาของคุณอัตโนมัติ"}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenGoogleHealth();
+                }}
+                className="px-2.5 py-1 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-[11px] font-bold transition-colors whitespace-nowrap shadow-xs"
+              >
+                {recovery.isFromGoogleHealth ? "ซิงค์ใหม่" : "ซิงค์ Google Fit"}
+              </button>
+            </div>
+          )}
+
           {/* Sleep Arc Card */}
           <div className="bg-gradient-to-b from-indigo-950 to-slate-900 text-white rounded-3xl p-5 text-center relative overflow-hidden">
             <div className="relative w-40 h-24 mx-auto overflow-hidden">

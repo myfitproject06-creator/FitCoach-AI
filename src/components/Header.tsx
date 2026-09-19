@@ -1,5 +1,5 @@
 import React from "react";
-import { MessageSquare, Flame, Sparkles, LayoutGrid } from "lucide-react";
+import { MessageSquare, Flame, Sparkles, LayoutGrid, Activity } from "lucide-react";
 import { FitnessStatus, UserProfile } from "../types";
 
 interface HeaderProps {
@@ -8,6 +8,8 @@ interface HeaderProps {
   onOpenLine: () => void;
   onOpenOnboarding: () => void;
   onOpenRichMenuStudio?: () => void;
+  onOpenGoogleHealth?: () => void;
+  isGoogleHealthConnected?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -16,6 +18,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenLine,
   onOpenOnboarding,
   onOpenRichMenuStudio,
+  onOpenGoogleHealth,
+  isGoogleHealthConnected,
 }) => {
   return (
     <header className="sticky top-0 z-30 bg-slate-900 text-white shadow-md border-b border-slate-800">
@@ -60,6 +64,21 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="text-slate-300 font-medium">Condition</span>
             <span className="text-emerald-400 font-bold">{status.condition}%</span>
           </div>
+
+          {/* Google Health Sync Button */}
+          {onOpenGoogleHealth && (
+            <button
+              onClick={onOpenGoogleHealth}
+              title="ซิงค์ข้อมูลก้าวเดิน & การนอนจาก Google Health (Google Fit)"
+              className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-semibold px-2.5 py-1.5 rounded-full border border-slate-700 transition-all active:scale-95"
+            >
+              <Activity className={`w-3.5 h-3.5 ${isGoogleHealthConnected ? "text-teal-400" : "text-slate-400"}`} />
+              <span className="hidden sm:inline">Google Fit</span>
+              {isGoogleHealthConnected && (
+                <span className="w-1.5 h-1.5 rounded-full bg-teal-400"></span>
+              )}
+            </button>
+          )}
 
           {/* LINE Rich Menu Studio Button */}
           {onOpenRichMenuStudio && (

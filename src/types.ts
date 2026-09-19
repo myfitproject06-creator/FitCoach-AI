@@ -67,6 +67,8 @@ export interface RecoveryData {
   muscleSoreness: "ไม่มี" | "เล็กน้อย" | "ปานกลาง" | "มาก";
   restingHeartRate: number;
   coachInsight: string;
+  isFromGoogleHealth?: boolean;
+  lastSyncedAt?: string;
 }
 
 export interface ActivityData {
@@ -74,6 +76,9 @@ export interface ActivityData {
   targetSteps: number;
   activeMinutes: number;
   distanceKm: number;
+  caloriesExpended?: number;
+  isFromGoogleHealth?: boolean;
+  lastSyncedAt?: string;
 }
 
 export interface FitnessStatus {
@@ -196,4 +201,21 @@ export interface WeeklyReportData {
   wins: string[];
   improvements: string[];
   coachSummary: string;
+}
+
+export interface GoogleHealthSyncState {
+  isConnected: boolean;
+  lastSyncTime?: string;
+  isSyncing: boolean;
+  userEmail?: string;
+  error?: string | null;
+  scopesGranted?: string[];
+  rawSteps?: number;
+  rawDistanceKm?: number;
+  rawActiveMinutes?: number;
+  rawCaloriesExpended?: number;
+  rawSleepHours?: number;
+  rawSleepMinutes?: number;
+  rawSleepStart?: string;
+  rawSleepEnd?: string;
 }

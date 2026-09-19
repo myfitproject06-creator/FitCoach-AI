@@ -45,6 +45,7 @@ interface HomeViewProps {
   onTriggerCoachScenario?: (scenario: "18_00" | "overdue" | "penalty" | "meal_prompt") => void;
   onClearPenalty?: () => void;
   onOpenRichMenuStudio?: () => void;
+  onOpenGoogleHealth?: () => void;
 }
 
 export const HomeView: React.FC<HomeViewProps> = ({
@@ -65,6 +66,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onTriggerCoachScenario,
   onClearPenalty,
   onOpenRichMenuStudio,
+  onOpenGoogleHealth,
 }) => {
   // Calculate completed daily tasks
   const tasks = [
@@ -252,7 +254,17 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 className="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-emerald-300 hover:text-white rounded-xl text-[11px] font-semibold transition-colors flex items-center gap-1 border border-white/10"
                 title="เปิดเครื่องมือออกแบบและดาวน์โหลด LINE Rich Menu (2500x1686)"
               >
-                <span>🎨 ออกแบบ Rich Menu</span>
+                <span>🎨 Rich Menu</span>
+              </button>
+            )}
+
+            {onOpenGoogleHealth && (
+              <button
+                onClick={onOpenGoogleHealth}
+                className="px-2.5 py-1 bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 hover:text-white rounded-xl text-[11px] font-semibold transition-colors flex items-center gap-1 border border-teal-500/30"
+                title="ซิงค์ข้อมูลก้าวเดิน & การนอนจาก Google Health (Google Fit)"
+              >
+                <span>❤️ Google Health</span>
               </button>
             )}
           </div>
@@ -514,37 +526,64 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
               <Moon className="w-4 h-4" />
             </div>
-            <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full">
-              {recovery.quality}
-            </span>
+            <div className="flex items-center gap-1">
+              {recovery.isFromGoogleHealth && (
+                <span className="text-[9px] font-bold text-teal-700 bg-teal-50 border border-teal-200 px-1.5 py-0.5 rounded-md">
+                  ✓ Google Fit
+                </span>
+              )}
+              <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full">
+                {recovery.quality}
+              </span>
+            </div>
           </div>
-          <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-600">
-            RECOVER · การนอน
-          </span>
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-600">
+              RECOVER · การนอน
+            </span>
+            <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+          </div>
           <h4 className="text-base font-bold text-slate-900 mt-0.5">
             {recovery.sleepHours} ชม. {recovery.sleepMinutes} นาที
           </h4>
           <p className="text-[11px] text-slate-400 mt-0.5">
-            เป้าหมาย: {recovery.targetSleepHours}
+            เป้าหมาย: {recovery.targetSleepHours} {recovery.sleepStart && `(${recovery.sleepStart} - ${recovery.sleepEnd})`}
           </p>
         </div>
 
         {/* Activity Card */}
         <div
           id="card-activity"
-          className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200"
+          onClick={onOpenGoogleHealth}
+          className={`bg-white rounded-2xl p-4 shadow-sm border border-slate-200 hover:border-slate-300 transition-all ${
+            onOpenGoogleHealth ? "cursor-pointer group" : ""
+          }`}
         >
           <div className="flex items-center justify-between mb-2">
             <div className="w-8 h-8 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center">
               <Footprints className="w-4 h-4" />
             </div>
-            <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full">
-              {Math.round((activity.currentSteps / activity.targetSteps) * 100)}%
-            </span>
+            <div className="flex items-center gap-1">
+              {activity.isFromGoogleHealth && (
+                <span className="text-[9px] font-bold text-teal-700 bg-teal-50 border border-teal-200 px-1.5 py-0.5 rounded-md">
+                  ✓ Google Fit
+                </span>
+              )}
+              <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full">
+                {Math.round((activity.currentSteps / activity.targetSteps) * 100)}%
+              </span>
+            </div>
           </div>
-          <span className="text-[11px] font-bold uppercase tracking-wider text-teal-600">
-            ACTIVITY · ก้าวเดิน
-          </span>
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-teal-600">
+              ACTIVITY · ก้าวเดิน
+            </span>
+            {onOpenGoogleHealth && (
+              <span className="text-[10px] text-teal-600 font-semibold group-hover:underline flex items-center gap-0.5">
+                ซิงค์ข้อมูล →
+              </span>
+            )}
+          </div>
           <h4 className="text-base font-bold text-slate-900 mt-0.5">
             {activity.currentSteps.toLocaleString()} ก้าว
           </h4>
