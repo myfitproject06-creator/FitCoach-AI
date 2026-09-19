@@ -1,0 +1,6 @@
+{
+  "name": "FitCoach AI - Personal Trainer",
+  "description": "An AI personal trainer that builds your training, nutrition, and recovery plan around your goal — then stays with you every day to keep you on track.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
