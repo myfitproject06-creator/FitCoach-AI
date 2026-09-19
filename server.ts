@@ -4,14 +4,16 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import { registerLineWebhook } from "./line-webhook";
+import { registerLineRichMenuRoutes } from "./line-richmenu";
 
 dotenv.config();
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
-app.use(express.json({ verify: (req: any, _res, buf) => { req.rawBody = buf; } }));
+app.use(express.json({ limit: "10mb", verify: (req: any, _res, buf) => { req.rawBody = buf; } }));
 registerLineWebhook(app, PORT);
+registerLineRichMenuRoutes(app);
 
 // Initialize Gemini client lazily/safely
 let aiClient: GoogleGenAI | null = null;

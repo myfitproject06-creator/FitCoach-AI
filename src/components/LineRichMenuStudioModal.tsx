@@ -19,6 +19,11 @@ import {
   Eye,
   FileJson,
   Layers,
+  Send,
+  Key,
+  RefreshCw,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 import { CoachAccountabilityState } from "../types";
 
@@ -104,12 +109,75 @@ export const LineRichMenuStudioModal: React.FC<LineRichMenuStudioModalProps> = (
 }) => {
   const [theme, setTheme] = useState<MenuTheme>("athletic_dark");
   const [layout, setLayout] = useState<MenuLayout>("large_6");
-  const [activeTab, setActiveTab] = useState<"preview" | "json" | "guide">("preview");
+  const [activeTab, setActiveTab] = useState<"preview" | "json" | "deploy" | "guide">("preview");
   const [copiedJson, setCopiedJson] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [selectedTileIndex, setSelectedTileIndex] = useState<number | null>(null);
 
+  // Admin deployment states
+  const [adminKey, setAdminKey] = useState<string>(() => {
+    try {
+      return localStorage.getItem("fitcoach_admin_key") || "";
+    } catch {
+      return "";
+    }
+  });
+  const [isDeploying, setIsDeploying] = useState(false);
+  const [deployResult, setDeployResult] = useState<{
+    success: boolean;
+    message: string;
+    richMenuId?: string;
+  } | null>(null);
+  const [menuStatus, setMenuStatus] = useState<any>(null);
+  const [statusLoading, setStatusLoading] = useState(false);
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Map each tile to postback or message action
+  const getActionForTile = (tileId: string, fallbackText: string) => {
+    switch (tileId) {
+      case "tile_a":
+        return {
+          type: "postback",
+          data: "action=workout_today",
+          displayText: "ขอตารางซ้อมวันนี้หน่อยครับ",
+        };
+      case "tile_b":
+        return {
+          type: "postback",
+          data: "action=log_food",
+          displayText: "บันทึกอาหารวันนี้ให้หน่อยครับ",
+        };
+      case "tile_c":
+        return {
+          type: "postback",
+          data: "action=plan_3months",
+          displayText: "จัดแผน 3 เดือนหุ่น Tom Holland ให้หน่อยครับ",
+        };
+      case "tile_d":
+        return {
+          type: "postback",
+          data: "action=discipline_check",
+          displayText: "เช็คสถานะวินัยและเวลานัดซ้อม",
+        };
+      case "tile_e":
+        return {
+          type: "message",
+          text: "วันนี้รู้สึกเหนื่อยมาก ช่วยปรับแผนการฝึกให้เบาลงหน่อยครับ",
+        };
+      case "tile_f":
+        return {
+          type: "postback",
+          data: "action=weekly_report",
+          displayText: "สรุปผลการออกกำลังกายสัปดาห์นี้",
+        };
+      default:
+        return {
+          type: "message",
+          text: fallbackText,
+        };
+    }
+  };
 
   // Generate LINE Messaging API JSON Specification
   const generateLineJson = () => {
@@ -132,10 +200,7 @@ export const LineRichMenuStudioModal: React.FC<LineRichMenuStudioModalProps> = (
             width: col === 2 ? width - colWidth * 2 : colWidth,
             height: rowHeight,
           },
-          action: {
-            type: "message",
-            text: tile.actionText,
-          },
+          action: getActionForTile(tile.id, tile.actionText),
         };
       });
     } else {
@@ -149,10 +214,7 @@ export const LineRichMenuStudioModal: React.FC<LineRichMenuStudioModalProps> = (
             width: idx === 2 ? width - colWidth * 2 : colWidth,
             height: height,
           },
-          action: {
-            type: "message",
-            text: tile.actionText,
-          },
+          action: getActionForTile(tile.id, tile.actionText),
         };
       });
     }
@@ -167,6 +229,76 @@ export const LineRichMenuStudioModal: React.FC<LineRichMenuStudioModalProps> = (
       chatBarText: "▲ เมนูหลัก FitCoach AI",
       areas,
     };
+  };
+
+  const checkLineStatus = async () => {
+    if (!adminKey) return;
+    setStatusLoading(true);
+    try {
+      const res = await fetch(`/api/admin/rich-menu/status?key=${encodeURIComponent(adminKey)}`);
+      const data = await res.json();
+      setMenuStatus(data);
+    } catch (err: any) {
+      console.error("Status check failed:", err);
+    } finally {
+      setStatusLoading(false);
+    }
+  };
+
+  const handleDeployToLine = async () => {
+    if (!adminKey.trim()) {
+      setDeployResult({
+        success: false,
+        message: "กรุณาระบุ ADMIN_KEY ให้ตรงกับที่ตั้งค่าไว้ใน Environment Variables บน Render ครับ",
+      });
+      return;
+    }
+
+    try {
+      localStorage.setItem("fitcoach_admin_key", adminKey.trim());
+    } catch {}
+
+    setIsDeploying(true);
+    setDeployResult(null);
+
+    try {
+      const canvas = canvasRef.current;
+      const imageBase64 = canvas ? canvas.toDataURL("image/png") : undefined;
+
+      const res = await fetch("/api/admin/rich-menu/setup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-key": adminKey.trim(),
+        },
+        body: JSON.stringify({
+          imageBase64,
+          config: generateLineJson(),
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setDeployResult({
+          success: true,
+          message: data.message || "ติดตั้ง Rich Menu ไปยัง LINE OA สำเร็จ!",
+          richMenuId: data.richMenuId,
+        });
+        checkLineStatus();
+      } else {
+        setDeployResult({
+          success: false,
+          message: data.error || data.details || "เกิดข้อผิดพลาดในการเชื่อมต่อ LINE Messaging API",
+        });
+      }
+    } catch (err: any) {
+      setDeployResult({
+        success: false,
+        message: err.message || "ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้",
+      });
+    } finally {
+      setIsDeploying(false);
+    }
   };
 
   const lineJsonString = JSON.stringify(generateLineJson(), null, 2);
@@ -408,6 +540,17 @@ export const LineRichMenuStudioModal: React.FC<LineRichMenuStudioModalProps> = (
             >
               <FileJson className="w-3.5 h-3.5" />
               <span>LINE Messaging API JSON</span>
+            </button>
+            <button
+              onClick={() => setActiveTab("deploy")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                activeTab === "deploy"
+                  ? "bg-[#06C755] text-white shadow-xs"
+                  : "text-slate-300 hover:text-white"
+              }`}
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>🚀 ติดตั้งไปยัง LINE Bot</span>
             </button>
             <button
               onClick={() => setActiveTab("guide")}
@@ -666,6 +809,125 @@ export const LineRichMenuStudioModal: React.FC<LineRichMenuStudioModalProps> = (
                 <span className="font-bold text-white block">💡 คำสั่ง cURL สำหรับสร้างผ่าน API:</span>
                 <code className="block bg-slate-950 p-2 rounded-lg text-[10px] text-slate-400 overflow-x-auto font-mono">
                   curl -v -X POST https://api.line.me/v2/bot/richmenu -H "Authorization: Bearer &lt;YOUR_CHANNEL_ACCESS_TOKEN&gt;" -H "Content-Type: application/json" -d '@richmenu.json'
+                </code>
+              </div>
+            </div>
+          )}
+
+          {/* Direct Deploy to LINE Bot Tab */}
+          {activeTab === "deploy" && (
+            <div className="space-y-4 text-xs text-slate-200">
+              <div className="bg-slate-800/80 border border-slate-700 rounded-2xl p-4 sm:p-5 space-y-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-full bg-[#06C755] text-white flex items-center justify-center text-xs font-bold">
+                        🚀
+                      </span>
+                      <span>ติดตั้ง Rich Menu ไปยัง LINE Bot โดยอัตโนมัติ (1-Click Deploy)</span>
+                    </h3>
+                    <p className="text-slate-400 mt-1 text-xs">
+                      ระบบจะสร้างโครงสร้างริชเมนู 6 ช่อง, อัปโหลดภาพ 2500x1686 px ที่คุณเลือก, และตั้งเป็นเมนูหลักเริ่มต้น (Default) บน LINE ให้ทันที
+                    </p>
+                  </div>
+                  <button
+                    onClick={checkLineStatus}
+                    disabled={statusLoading}
+                    className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-xl text-xs font-medium transition-colors cursor-pointer"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${statusLoading ? "animate-spin" : ""}`} />
+                    <span>เช็คสถานะบอท</span>
+                  </button>
+                </div>
+
+                {/* Status Box */}
+                {menuStatus && (
+                  <div className="p-3 bg-slate-900/90 rounded-xl border border-slate-700/80 space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-400">สถานะ Default Rich Menu ปัจจุบัน:</span>
+                      <span className="font-mono text-emerald-400 font-bold">
+                        {menuStatus.defaultMenuId || "ยังไม่ได้ตั้งค่า"}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-400">
+                      จำนวน Rich Menu ทั้งหมดในระบบ: {menuStatus.menus?.length || 0} รายการ
+                    </div>
+                  </div>
+                )}
+
+                {/* Admin Key Input */}
+                <div className="space-y-1.5 pt-2 border-t border-slate-700/80">
+                  <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                    <Key className="w-3.5 h-3.5 text-amber-400" />
+                    <span>ADMIN_KEY (กุญแจผู้ดูแลระบบ):</span>
+                  </label>
+                  <p className="text-[11px] text-slate-400">
+                    ต้องตรงกับค่า <code>ADMIN_KEY</code> ที่คุณตั้งไว้ใน Environment Variables บน Render
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="password"
+                      value={adminKey}
+                      onChange={(e) => setAdminKey(e.target.value)}
+                      placeholder="ใส่ ADMIN_KEY เช่น my-fitcoach-secret-admin"
+                      className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-[#06C755]"
+                    />
+                    <button
+                      onClick={handleDeployToLine}
+                      disabled={isDeploying}
+                      className="flex items-center gap-2 px-5 py-2 bg-[#06C755] hover:bg-[#05b34c] disabled:bg-slate-700 text-white font-bold rounded-xl text-xs transition-all shadow-lg active:scale-95 cursor-pointer shrink-0"
+                    >
+                      {isDeploying ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>กำลังติดตั้ง...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-3.5 h-3.5" />
+                          <span>ติดตั้งไปยัง LINE ทันที</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Results notification */}
+                {deployResult && (
+                  <div
+                    className={`p-3.5 rounded-xl border flex items-start gap-2.5 animate-in fade-in duration-200 ${
+                      deployResult.success
+                        ? "bg-emerald-950/60 border-emerald-500/50 text-emerald-200"
+                        : "bg-rose-950/60 border-rose-500/50 text-rose-200"
+                    }`}
+                  >
+                    {deployResult.success ? (
+                      <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                    ) : (
+                      <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+                    )}
+                    <div className="space-y-1 text-xs">
+                      <strong className="block font-bold">
+                        {deployResult.success ? "สำเร็จ!" : "ไม่สามารถติดตั้งได้"}
+                      </strong>
+                      <p>{deployResult.message}</p>
+                      {deployResult.richMenuId && (
+                        <div className="font-mono text-[11px] text-emerald-300">
+                          Rich Menu ID: {deployResult.richMenuId}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* cURL Alternative */}
+              <div className="bg-slate-800/40 border border-slate-800 rounded-2xl p-4 space-y-2">
+                <span className="font-bold text-slate-300 block">💡 หรือสั่งงานผ่าน cURL / Terminal:</span>
+                <code className="block bg-slate-950 p-2.5 rounded-xl text-[11px] text-emerald-400 overflow-x-auto font-mono">
+                  curl -X POST {typeof window !== "undefined" ? window.location.origin : "https://your-domain.onrender.com"}/api/admin/rich-menu/setup \<br />
+                  &nbsp;&nbsp;-H "x-admin-key: YOUR_ADMIN_KEY" \<br />
+                  &nbsp;&nbsp;-H "Content-Type: application/json"
                 </code>
               </div>
             </div>
