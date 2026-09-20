@@ -89,7 +89,7 @@ export function getStandardRichMenuConfig() {
     size: { width: 2500, height: 1686 },
     selected: true,
     name: "FitCoach AI Rich Menu V2",
-    chatBarText: "▲ เมนูหลัก FitCoach AI",
+    chatBarText: "เมนูหลัก",
     areas: [
       // 1. Top Left: Workout Today (Postback)
       {
