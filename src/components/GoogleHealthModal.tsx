@@ -24,17 +24,13 @@ import {
 interface GoogleHealthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  recovery?: any;
-  onSyncComplete?: (healthData: GoogleHealthData) => void;
-  onSyncGoogleFit?: (healthData: GoogleHealthData) => void;
+  onSyncComplete: (healthData: GoogleHealthData) => void;
 }
 
 export const GoogleHealthModal: React.FC<GoogleHealthModalProps> = ({
   isOpen,
   onClose,
-  recovery: _recovery,
   onSyncComplete,
-  onSyncGoogleFit,
 }) => {
   const [clientId, setClientId] = useState("");
   const [isConfigured, setIsConfigured] = useState(false);
@@ -44,9 +40,11 @@ export const GoogleHealthModal: React.FC<GoogleHealthModalProps> = ({
   const [syncedData, setSyncedData] = useState<GoogleHealthData | null>(null);
 
   useEffect(() => {
+    // Check if client ID is stored or in env
     const envClientId = (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID || "";
     const storedClientId = localStorage.getItem("fitcoach_google_client_id") || "";
     const activeClientId = storedClientId || envClientId;
+
     if (activeClientId) {
       setClientId(activeClientId);
       setIsConfigured(true);
@@ -71,17 +69,17 @@ export const GoogleHealthModal: React.FC<GoogleHealthModalProps> = ({
     setIsLoading(true);
     try {
       if (!isConfigured) {
-        throw new Error("กรุณากรอก Google Client ID ให้ถูกต้อง");
+        throw new Error("กรุณากรอก Google Client ID ก่อน");
       }
       await requestGoogleFitAccessToken();
       setIsAuthenticated(true);
+      // Automatically fetch after token
       const data = await fetchGoogleFitHealthData();
       setSyncedData(data);
-      if (onSyncComplete) onSyncComplete(data);
-      if (onSyncGoogleFit) onSyncGoogleFit(data);
+      onSyncComplete(data);
     } catch (err: any) {
       console.error(err);
-      setErrorMsg(err.message || "การเชื่อมต่อ Google Fit ขัดข้อง");
+      setErrorMsg(err.message || "ไม่สามารถเชื่อมต่อ Google Fit ได้");
     } finally {
       setIsLoading(false);
     }
@@ -93,17 +91,17 @@ export const GoogleHealthModal: React.FC<GoogleHealthModalProps> = ({
     try {
       const data = await fetchGoogleFitHealthData();
       setSyncedData(data);
-      if (onSyncComplete) onSyncComplete(data);
-      if (onSyncGoogleFit) onSyncGoogleFit(data);
+      onSyncComplete(data);
     } catch (err: any) {
       console.error(err);
-      setErrorMsg(err.message || "เกิดข้อผิดพลาดในการดึงข้อมูล");
+      setErrorMsg(err.message || "เกิดข้อผิดพลาดในการดึงข้อมูลสุขภาพ");
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleUseMockData = () => {
+    // Simulate real synced payload for demo purposes if user hasn't set OAuth credential
     const simulatedData: GoogleHealthData = {
       steps: 8450,
       targetSteps: 8000,
@@ -118,8 +116,7 @@ export const GoogleHealthModal: React.FC<GoogleHealthModalProps> = ({
       syncedAt: new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }),
     };
     setSyncedData(simulatedData);
-    if (onSyncComplete) onSyncComplete(simulatedData);
-    if (onSyncGoogleFit) onSyncGoogleFit(simulatedData);
+    onSyncComplete(simulatedData);
     setIsAuthenticated(true);
   };
 
@@ -142,7 +139,7 @@ export const GoogleHealthModal: React.FC<GoogleHealthModalProps> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                ซิงค์ก้าวเดิน การนอนหลับ และแคลอรี่อัตโนมัติ
+                ดึงข้อมูลก้าวเดิน แคลอรี่ และการนอนหลับจริงจากนาฬิกา / สมาร์ทโฟน
               </p>
             </div>
           </div>
@@ -172,7 +169,7 @@ export const GoogleHealthModal: React.FC<GoogleHealthModalProps> = ({
               />
               <span className="text-xs font-semibold">
                 {isAuthenticated
-                  ? "เชื่อมต่อกับ Google Fit สำเร็จ (OAuth 2.0 Active)"
+                  ? "เชื่อมต่อ Google Fit สำเร็จแล้ว (OAuth 2.0 Active)"
                   : "ยังไม่ได้เชื่อมต่อ Google Account"}
               </span>
             </div>
@@ -194,7 +191,7 @@ export const GoogleHealthModal: React.FC<GoogleHealthModalProps> = ({
           {syncedData ? (
             <div className="space-y-2">
               <span className="text-xs font-bold text-slate-300 block">
-                ข้อมูลสุขภาพล่าสุดที่ซิงค์มา:
+                ข้อมูลสุขภาพล่าสุดจากอุปกรณ์ของคุณ:
               </span>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
@@ -206,9 +203,10 @@ export const GoogleHealthModal: React.FC<GoogleHealthModalProps> = ({
                     {syncedData.steps.toLocaleString()}
                   </p>
                   <span className="text-[10px] text-slate-400">
-                    เป้าหมาย {(syncedData.targetSteps || 8000).toLocaleString()} ก้าว
+                    เป้า {(syncedData.targetSteps || 8000).toLocaleString()} ก้าว
                   </span>
                 </div>
+
                 <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
                   <div className="flex items-center gap-1.5 text-indigo-400 text-xs mb-1">
                     <Moon className="w-3.5 h-3.5" />
@@ -221,6 +219,7 @@ export const GoogleHealthModal: React.FC<GoogleHealthModalProps> = ({
                     {syncedData.sleepStart} - {syncedData.sleepEnd}
                   </span>
                 </div>
+
                 <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
                   <div className="flex items-center gap-1.5 text-orange-400 text-xs mb-1">
                     <Flame className="w-3.5 h-3.5" />
@@ -249,10 +248,11 @@ export const GoogleHealthModal: React.FC<GoogleHealthModalProps> = ({
                 rel="noreferrer"
                 className="text-[11px] text-teal-400 hover:underline flex items-center gap-1"
               >
-                <span>สร้าง Client ID</span>
+                <span>รับ Client ID</span>
                 <ExternalLink className="w-3 h-3" />
               </a>
             </div>
+
             <form onSubmit={handleSaveClientId} className="space-y-2">
               <input
                 type="text"
@@ -273,12 +273,12 @@ export const GoogleHealthModal: React.FC<GoogleHealthModalProps> = ({
                   onClick={handleUseMockData}
                   className="px-3 py-1.5 bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 rounded-xl text-xs font-semibold transition-colors border border-teal-500/30"
                 >
-                  ทดสอบดึงข้อมูลจำลอง (Demo Mode)
+                  ทดลองใช้ข้อมูลจำลอง (Demo Mode)
                 </button>
               </div>
             </form>
             <p className="text-[10px] text-slate-400 leading-relaxed">
-              * ข้อมูลที่ซิงค์มาจะนำมาคำนวณวงกลม EAT / TRAIN / RECOVER และให้โค้ชปรับตารางอัตโนมัติ
+              * ข้อมูลที่ซิงค์จะถูกประมวลผลบนเบราว์เซอร์ของคุณโดยตรง เพื่อใช้ปรับระดับการฝึกและคำแนะนำ EAT / TRAIN / RECOVER ประจำวัน
             </p>
           </div>
         </div>
@@ -289,7 +289,7 @@ export const GoogleHealthModal: React.FC<GoogleHealthModalProps> = ({
             onClick={onClose}
             className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl text-xs transition-colors"
           >
-            ปิดหน้าต่าง
+            ปิด
           </button>
           <div className="flex items-center gap-2">
             {isAuthenticated ? (
@@ -299,7 +299,7 @@ export const GoogleHealthModal: React.FC<GoogleHealthModalProps> = ({
                 className="px-4 py-2 bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-md flex items-center gap-1.5 active:scale-95 cursor-pointer disabled:opacity-50"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
-                <span>{isLoading ? "กำลังซิงค์..." : "ซิงค์ข้อมูลเดี๋ยวนี้"}</span>
+                <span>{isLoading ? "กำลังดึงข้อมูล..." : "ซิงค์ข้อมูลเดี๋ยวนี้"}</span>
               </button>
             ) : (
               <button
@@ -308,7 +308,7 @@ export const GoogleHealthModal: React.FC<GoogleHealthModalProps> = ({
                 className="px-4 py-2 bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-md flex items-center gap-1.5 active:scale-95 cursor-pointer disabled:opacity-50"
               >
                 <Zap className="w-3.5 h-3.5" />
-                <span>{isLoading ? "กำลังเชื่อมต่อ..." : "เชื่อมต่อ Google Account"}</span>
+                <span>{isLoading ? "กำลังเชื่อมต่อ..." : "เข้าสู่ระบบด้วย Google"}</span>
               </button>
             )}
           </div>

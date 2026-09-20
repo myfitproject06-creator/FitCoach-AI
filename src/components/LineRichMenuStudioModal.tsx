@@ -1,286 +1,263 @@
-import React, { useRef, useState } from "react";
+import React, { useState } from "react";
 import {
   X,
+  LayoutGrid,
   Download,
   Copy,
   Check,
-  LayoutGrid,
-  FileCode,
   Sparkles,
+  Smartphone,
+  Info,
   ExternalLink,
+  Layers,
+  Palette,
 } from "lucide-react";
 
 interface LineRichMenuStudioModalProps {
   isOpen: boolean;
   onClose: () => void;
-  liffUrl?: string;
 }
 
 export const LineRichMenuStudioModal: React.FC<LineRichMenuStudioModalProps> = ({
   isOpen,
   onClose,
-  liffUrl = "https://liff.line.me/YOUR_LIFF_ID",
 }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [copied, setCopied] = useState(false);
-  const [activeTab, setActiveTab] = useState<"preview" | "json">("preview");
+  const [copiedJson, setCopiedJson] = useState(false);
+  const [selectedTheme, setSelectedTheme] = useState<"dark" | "emerald" | "clean">("dark");
 
   if (!isOpen) return null;
 
-  const handleDownloadImage = () => {
-    const canvas = document.createElement("canvas");
-    canvas.width = 2500;
-    canvas.height = 1686;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    // Draw Background
-    const bgGrad = ctx.createLinearGradient(0, 0, 2500, 1686);
-    bgGrad.addColorStop(0, "#090d16");
-    bgGrad.addColorStop(0.5, "#0f172a");
-    bgGrad.addColorStop(1, "#022c22");
-    ctx.fillStyle = bgGrad;
-    ctx.fillRect(0, 0, 2500, 1686);
-
-    // Tiles (2 rows, 3 cols)
-    const tileW = 2500 / 3;
-    const tileH = 1686 / 2;
-
-    const tiles = [
-      { id: "A", title: "ตารางซ้อมวันนี้", sub: "TODAY WORKOUT", icon: "🏋️", color: "#f97316" },
-      { id: "B", title: "อาหาร & แคลอรี่", sub: "NUTRITION & MACROS", icon: "🥗", color: "#10b981" },
-      { id: "C", title: "การฟื้นฟู & หลับ", sub: "SLEEP & RECOVERY", icon: "🌙", color: "#6366f1" },
-      { id: "D", title: "แผนฝึก 3 เดือน", sub: "TRANSFORMATION PLAN", icon: "🎯", color: "#14b8a6" },
-      { id: "E", title: "ปรับตารางด่วน AI", sub: "ADAPTIVE WORKOUT", icon: "⚡", color: "#06b6d4" },
-      { id: "F", title: "รายงานความก้าวหน้า", sub: "WEEKLY REPORT & RADAR", icon: "📊", color: "#f59e0b" },
-    ];
-
-    tiles.forEach((t, i) => {
-      const col = i % 3;
-      const row = Math.floor(i / 3);
-      const x = col * tileW;
-      const y = row * tileH;
-
-      // Tile background border
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
-      ctx.lineWidth = 4;
-      ctx.strokeRect(x + 20, y + 20, tileW - 40, tileH - 40);
-
-      // Card Background
-      ctx.fillStyle = "rgba(15, 23, 42, 0.6)";
-      ctx.fillRect(x + 20, y + 20, tileW - 40, tileH - 40);
-
-      // Accent color strip at top of card
-      ctx.fillStyle = t.color;
-      ctx.fillRect(x + 20, y + 20, tileW - 40, 16);
-
-      // Icon Emoji
-      ctx.font = "140px sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(t.icon, x + tileW / 2, y + tileH / 2 - 100);
-
-      // Title (Thai)
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 80px 'Kanit', 'Noto Sans Thai', sans-serif";
-      ctx.fillText(t.title, x + tileW / 2, y + tileH / 2 + 80);
-
-      // Subtitle (English)
-      ctx.fillStyle = t.color;
-      ctx.font = "bold 42px sans-serif";
-      ctx.fillText(t.sub, x + tileW / 2, y + tileH / 2 + 190);
-    });
-
-    // Branding in Center Top/Bottom bar
-    ctx.fillStyle = "#06C755";
-    ctx.font = "bold 46px sans-serif";
-    ctx.textAlign = "right";
-    ctx.fillText("FitCoach AI • Powered by LINE & Gemini", 2500 - 80, 1686 - 50);
-
-    const dataUrl = canvas.toDataURL("image/png");
-    const link = document.createElement("a");
-    link.download = "fitcoach-richmenu-2500x1686.png";
-    link.href = dataUrl;
-    link.click();
-  };
-
-  const lineRichMenuJson = {
+  // Official LINE Rich Menu Spec: 2500 x 1686 px (Standard Large), 6 grid zones
+  const richMenuSpecJson = {
     size: {
       width: 2500,
       height: 1686,
     },
     selected: true,
-    name: "FitCoach_AI_Master_Menu",
-    chatBarText: "เมนูหลัก FitCoach",
+    name: "FitCoach AI Official Rich Menu",
+    chatBarText: "เมนูโค้ชฟิตเนส AI",
     areas: [
       {
         bounds: { x: 0, y: 0, width: 833, height: 843 },
-        action: { type: "uri", uri: `${liffUrl}?view=workout` },
+        action: { type: "message", text: "ขอเริ่มดูโปรแกรมออกกำลังกายวันนี้" },
       },
       {
         bounds: { x: 833, y: 0, width: 834, height: 843 },
-        action: { type: "uri", uri: `${liffUrl}?view=nutrition` },
+        action: { type: "message", text: "ขอเปิดบันทึกโภชนาการและแคลอรี่" },
       },
       {
         bounds: { x: 1667, y: 0, width: 833, height: 843 },
-        action: { type: "uri", uri: `${liffUrl}?view=recovery` },
+        action: { type: "message", text: "ขอดูรายงานการนอนหลับและการฟื้นตัว" },
       },
       {
         bounds: { x: 0, y: 843, width: 833, height: 843 },
-        action: { type: "uri", uri: `${liffUrl}?view=plan3months` },
+        action: { type: "message", text: "ขอดูระดับเรดาร์สมรรถภาพของผมตอนนี้" },
       },
       {
         bounds: { x: 833, y: 843, width: 834, height: 843 },
-        action: { type: "uri", uri: `${liffUrl}?view=adapt` },
+        action: { type: "message", text: "โค้ช มีคำแนะนำสำหรับวันนี้ไหม?" },
       },
       {
         bounds: { x: 1667, y: 843, width: 833, height: 843 },
-        action: { type: "uri", uri: `${liffUrl}?view=report` },
+        action: { type: "message", text: "วันนี้รู้สึกเพลีย อยากขอปรับโปรแกรมด่วนครับ" },
       },
     ],
   };
 
   const handleCopyJson = () => {
-    navigator.clipboard.writeText(JSON.stringify(lineRichMenuJson, null, 2));
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    navigator.clipboard.writeText(JSON.stringify(richMenuSpecJson, null, 2));
+    setCopiedJson(true);
+    setTimeout(() => setCopiedJson(false), 2000);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-3 sm:p-6 animate-in fade-in duration-200">
-      <div className="w-full max-w-2xl rounded-3xl bg-slate-900 border border-slate-700 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-3 sm:p-6 animate-in fade-in duration-200">
+      <div className="w-full max-w-2xl max-h-[90vh] rounded-3xl bg-slate-900 border border-slate-700 shadow-2xl overflow-hidden flex flex-col text-white">
         {/* Header */}
-        <div className="p-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between text-white">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-[#06C755] flex items-center justify-center font-bold text-white shadow-xs">
-              <LayoutGrid className="w-4 h-4" />
+        <div className="p-4 sm:p-5 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-[#06C755] text-white flex items-center justify-center font-bold shadow-md shadow-[#06C755]/20">
+              <LayoutGrid className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-white">
-                LINE Rich Menu Design Studio (2500 x 1686 px)
-              </h3>
-              <p className="text-[11px] text-slate-400">
-                สเปกทางการของ LINE Official Account พร้อมดาวน์โหลดภาพและคัดลอก JSON Bounds
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-white">
+                  LINE Rich Menu Designer Studio
+                </h3>
+                <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded-full border border-emerald-500/30">
+                  2500 × 1686 PX
+                </span>
+              </div>
+              <p className="text-xs text-slate-400">
+                มาตรฐานขนาดและพิกัด Tap Area ตามข้อกำหนด LINE Official Account
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
+            className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Tab Controls */}
-        <div className="flex border-b border-slate-800 bg-slate-950/50 px-4 pt-2 gap-4">
-          <button
-            onClick={() => setActiveTab("preview")}
-            className={`pb-2.5 text-xs font-bold transition-colors border-b-2 ${
-              activeTab === "preview"
-                ? "border-[#06C755] text-[#06C755]"
-                : "border-transparent text-slate-400 hover:text-slate-200"
-            }`}
-          >
-            ภาพตัวอย่าง (Rich Menu 6 ช่อง)
-          </button>
-          <button
-            onClick={() => setActiveTab("json")}
-            className={`pb-2.5 text-xs font-bold transition-colors border-b-2 flex items-center gap-1.5 ${
-              activeTab === "json"
-                ? "border-[#06C755] text-[#06C755]"
-                : "border-transparent text-slate-400 hover:text-slate-200"
-            }`}
-          >
-            <FileCode className="w-3.5 h-3.5" />
-            <span>LINE Messaging API JSON Spec</span>
-          </button>
-        </div>
+        {/* Studio Content Body */}
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-5 flex-1">
+          {/* Visual Canvas (2500 x 1686 scaled preview) */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-slate-300 flex items-center gap-1.5">
+                <Palette className="w-4 h-4 text-emerald-400" />
+                พรีวิวดีไซน์ Rich Menu (6 กริดมาตรฐาน)
+              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-500 text-[11px]">ธีม:</span>
+                <button
+                  onClick={() => setSelectedTheme("dark")}
+                  className={`px-2 py-0.5 rounded-lg text-[10px] font-bold ${
+                    selectedTheme === "dark"
+                      ? "bg-slate-700 text-white"
+                      : "bg-slate-800 text-slate-400 hover:text-white"
+                  }`}
+                >
+                  Dark Slate
+                </button>
+                <button
+                  onClick={() => setSelectedTheme("emerald")}
+                  className={`px-2 py-0.5 rounded-lg text-[10px] font-bold ${
+                    selectedTheme === "emerald"
+                      ? "bg-emerald-600 text-white"
+                      : "bg-slate-800 text-slate-400 hover:text-white"
+                  }`}
+                >
+                  Fit Emerald
+                </button>
+              </div>
+            </div>
 
-        {/* Content Body */}
-        <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-4 text-white">
-          {activeTab === "preview" ? (
-            <div className="space-y-4">
-              {/* Visual Grid Mockup (Ratio 2500:1686 ~ 1.48:1) */}
-              <div className="w-full aspect-[2500/1686] bg-slate-950 rounded-2xl border-2 border-slate-700 overflow-hidden grid grid-cols-3 grid-rows-2 p-2 gap-2 shadow-inner">
-                {[
-                  { title: "ตารางซ้อมวันนี้", sub: "TODAY WORKOUT", emoji: "🏋️", col: "text-orange-400" },
-                  { title: "อาหาร & แคลอรี่", sub: "NUTRITION & MACROS", emoji: "🥗", col: "text-emerald-400" },
-                  { title: "การฟื้นฟู & หลับ", sub: "SLEEP & RECOVERY", emoji: "🌙", col: "text-indigo-400" },
-                  { title: "แผนฝึก 3 เดือน", sub: "TRANSFORMATION PLAN", emoji: "🎯", col: "text-teal-400" },
-                  { title: "ปรับตารางด่วน AI", sub: "ADAPTIVE WORKOUT", emoji: "⚡", col: "text-cyan-400" },
-                  { title: "รายงานความก้าวหน้า", sub: "WEEKLY REPORT & RADAR", emoji: "📊", col: "text-amber-400" },
-                ].map((item, idx) => (
-                  <div
-                    key={idx}
-                    className="bg-slate-900/90 border border-slate-800 rounded-xl p-2 sm:p-3 flex flex-col items-center justify-center text-center gap-1 hover:border-slate-700 transition-colors"
-                  >
-                    <span className="text-2xl sm:text-4xl">{item.emoji}</span>
-                    <span className="text-[11px] sm:text-xs font-bold text-white">
-                      {item.title}
-                    </span>
-                    <span className={`text-[8px] sm:text-[10px] font-mono uppercase ${item.col}`}>
-                      {item.sub}
-                    </span>
+            {/* Simulated 2500 x 1686 Canvas Preview */}
+            <div className="w-full aspect-[2500/1686] bg-slate-950 rounded-2xl border-2 border-dashed border-slate-700 p-2 relative overflow-hidden shadow-inner flex flex-col justify-between">
+              {/* Grid tiles */}
+              <div className="grid grid-cols-3 grid-rows-2 gap-1.5 h-full">
+                {/* Tile 1 */}
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 flex flex-col items-center justify-center text-center relative group hover:border-orange-500/50 transition-all">
+                  <span className="absolute top-1.5 left-2 text-[9px] font-mono text-slate-500">
+                    A: 0,0 (833×843)
+                  </span>
+                  <div className="w-9 h-9 rounded-xl bg-orange-500/20 text-orange-400 flex items-center justify-center text-sm font-black mb-1">
+                    🏋️
                   </div>
-                ))}
-              </div>
-
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-800/60 p-3.5 rounded-2xl border border-slate-700/80">
-                <div className="text-xs text-slate-300">
-                  <p className="font-semibold text-white">
-                    ขนาดภาพมาตรฐาน: 2500 x 1686 px (PNG)
-                  </p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    สามารถกดดาวน์โหลดแล้วนำไปอัปโหลดบน LINE Official Account Manager ได้ทันที
-                  </p>
+                  <span className="text-xs font-bold text-white">โปรแกรมฝึก</span>
+                  <span className="text-[10px] text-slate-400">วันนี้ (TRAIN)</span>
                 </div>
-                <button
-                  onClick={handleDownloadImage}
-                  className="px-4 py-2 bg-[#06C755] hover:bg-[#05b34c] text-white font-bold rounded-xl text-xs transition-all shadow-md flex items-center gap-1.5 shrink-0 active:scale-95"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>ดาวน์โหลดภาพ PNG (2500x1686)</span>
-                </button>
+
+                {/* Tile 2 */}
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 flex flex-col items-center justify-center text-center relative group hover:border-emerald-500/50 transition-all">
+                  <span className="absolute top-1.5 left-2 text-[9px] font-mono text-slate-500">
+                    B: 833,0 (834×843)
+                  </span>
+                  <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-sm font-black mb-1">
+                    🥗
+                  </div>
+                  <span className="text-xs font-bold text-white">โภชนาการ</span>
+                  <span className="text-[10px] text-slate-400">แคลอรี่ (EAT)</span>
+                </div>
+
+                {/* Tile 3 */}
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 flex flex-col items-center justify-center text-center relative group hover:border-indigo-500/50 transition-all">
+                  <span className="absolute top-1.5 left-2 text-[9px] font-mono text-slate-500">
+                    C: 1667,0 (833×843)
+                  </span>
+                  <div className="w-9 h-9 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-sm font-black mb-1">
+                    🌙
+                  </div>
+                  <span className="text-xs font-bold text-white">การฟื้นตัว</span>
+                  <span className="text-[10px] text-slate-400">การนอน (RECOVER)</span>
+                </div>
+
+                {/* Tile 4 */}
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 flex flex-col items-center justify-center text-center relative group hover:border-teal-500/50 transition-all">
+                  <span className="absolute top-1.5 left-2 text-[9px] font-mono text-slate-500">
+                    D: 0,843 (833×843)
+                  </span>
+                  <div className="w-9 h-9 rounded-xl bg-teal-500/20 text-teal-400 flex items-center justify-center text-sm font-black mb-1">
+                    📊
+                  </div>
+                  <span className="text-xs font-bold text-white">เรดาร์สถานะ</span>
+                  <span className="text-[10px] text-slate-400">สมรรถภาพ & XP</span>
+                </div>
+
+                {/* Tile 5 */}
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 flex flex-col items-center justify-center text-center relative group hover:border-yellow-500/50 transition-all">
+                  <span className="absolute top-1.5 left-2 text-[9px] font-mono text-slate-500">
+                    E: 833,843 (834×843)
+                  </span>
+                  <div className="w-9 h-9 rounded-xl bg-yellow-500/20 text-yellow-400 flex items-center justify-center text-sm font-black mb-1">
+                    ✨
+                  </div>
+                  <span className="text-xs font-bold text-white">คำแนะนำโค้ช</span>
+                  <span className="text-[10px] text-slate-400">คำแนะนำประจำวัน</span>
+                </div>
+
+                {/* Tile 6 */}
+                <div className="bg-slate-900 border border-emerald-500/40 rounded-xl p-3 flex flex-col items-center justify-center text-center relative group hover:border-emerald-400 transition-all">
+                  <span className="absolute top-1.5 left-2 text-[9px] font-mono text-slate-500">
+                    F: 1667,843 (833×843)
+                  </span>
+                  <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-300 flex items-center justify-center text-sm font-black mb-1">
+                    ⚡
+                  </div>
+                  <span className="text-xs font-bold text-emerald-300">ปรับแผนด่วน</span>
+                  <span className="text-[10px] text-slate-400">เวลาน้อย / อ่อนล้า</span>
+                </div>
               </div>
             </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-300">
-                  JSON สำหรับสร้าง Rich Menu ผ่าน LINE Messaging API:
-                </span>
-                <button
-                  onClick={handleCopyJson}
-                  className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5"
-                >
-                  {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                  <span>{copied ? "คัดลอกแล้ว" : "คัดลอก JSON"}</span>
-                </button>
-              </div>
-              <pre className="bg-slate-950 p-4 rounded-2xl border border-slate-800 text-[11px] font-mono text-emerald-400 overflow-x-auto max-h-[360px] leading-relaxed">
-                {JSON.stringify(lineRichMenuJson, null, 2)}
-              </pre>
+          </div>
+
+          {/* Official Specifications & Documentation */}
+          <div className="bg-slate-800/80 p-4 rounded-2xl border border-slate-700/80 space-y-2 text-xs">
+            <h4 className="font-bold text-white flex items-center gap-1.5">
+              <Info className="w-4 h-4 text-emerald-400" />
+              ข้อกำหนดภาพ Rich Menu ของ LINE Official Account:
+            </h4>
+            <ul className="list-disc list-inside space-y-1 text-slate-300 text-[11px] leading-relaxed">
+              <li><strong>ขนาดภาพ:</strong> 2500 × 1686 พิกเซล (Large Standard Template)</li>
+              <li><strong>รูปแบบไฟล์ที่รองรับ:</strong> JPEG หรือ PNG (ขนาดไม่เกิน 1 MB)</li>
+              <li><strong>โครงสร้าง:</strong> 6 ช่องตารางเท่ากัน (Zone A ถึง F) ช่องละ 833 × 843 px</li>
+              <li><strong>ข้อความบนแถบเมนูด้านล่าง (Chat bar text):</strong> เมนูโค้ชฟิตเนส AI</li>
+            </ul>
+          </div>
+
+          {/* JSON Action Configuration for LINE Official Account Manager / Bot API */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-300">
+                Rich Menu JSON Configuration (สำหรับ LINE Messaging API / OA Manager)
+              </span>
+              <button
+                onClick={handleCopyJson}
+                className="flex items-center gap-1 text-xs font-semibold text-emerald-400 hover:text-emerald-300 bg-emerald-950/60 border border-emerald-500/30 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+              >
+                {copiedJson ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedJson ? "คัดลอกแล้ว!" : "คัดลอก JSON"}</span>
+              </button>
             </div>
-          )}
+            <pre className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-[11px] font-mono text-emerald-300 overflow-x-auto max-h-40">
+              {JSON.stringify(richMenuSpecJson, null, 2)}
+            </pre>
+          </div>
         </div>
 
         {/* Footer */}
-        <div className="p-4 bg-slate-950 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
-          <a
-            href="https://manager.line.biz"
-            target="_blank"
-            rel="noreferrer"
-            className="text-emerald-400 hover:underline flex items-center gap-1"
-          >
-            <span>ไปที่ LINE Official Account Manager</span>
-            <ExternalLink className="w-3 h-3" />
-          </a>
+        <div className="p-4 bg-slate-950 border-t border-slate-800 flex items-center justify-between">
+          <span className="text-xs text-slate-400">
+            พร้อมนำไปอัปโหลดบน <strong>LINE Official Account Manager</strong>
+          </span>
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-xl text-xs transition-colors"
+            className="px-5 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs transition-colors shadow-md cursor-pointer"
           >
-            ปิดหน้าต่าง
+            ปิดสตูดิโอ
           </button>
         </div>
       </div>

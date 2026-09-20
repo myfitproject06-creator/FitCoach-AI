@@ -14,24 +14,16 @@ import { WorkoutPlan } from "../types";
 interface AdaptiveWorkoutModalProps {
   isOpen: boolean;
   onClose: () => void;
-  currentWorkout?: WorkoutPlan;
-  currentPlan?: WorkoutPlan;
-  recovery?: any;
-  onApplyAdaptedWorkout?: (adapted: WorkoutPlan) => void;
-  onApplyAdaptivePlan?: (adapted: WorkoutPlan) => void;
+  currentWorkout: WorkoutPlan;
+  onApplyAdaptedWorkout: (adapted: WorkoutPlan) => void;
 }
 
 export const AdaptiveWorkoutModal: React.FC<AdaptiveWorkoutModalProps> = ({
   isOpen,
   onClose,
   currentWorkout,
-  currentPlan,
-  recovery: _recovery,
   onApplyAdaptedWorkout,
-  onApplyAdaptivePlan,
 }) => {
-  const activeWorkout = (currentWorkout || currentPlan) as WorkoutPlan;
-  const applyHandler = onApplyAdaptedWorkout || onApplyAdaptivePlan || (() => {});
   const [fatigueLevel, setFatigueLevel] = useState<"low" | "medium" | "high">("medium");
   const [availableTime, setAvailableTime] = useState<number>(30);
   const [equipmentConstraint, setEquipmentConstraint] = useState<string>("dumbbells_only");
@@ -41,26 +33,27 @@ export const AdaptiveWorkoutModal: React.FC<AdaptiveWorkoutModalProps> = ({
 
   const handleGenerateAdaptive = () => {
     setIsGenerating(true);
+
     setTimeout(() => {
-      const baseExercises = activeWorkout?.exercises || [];
-      const adaptedExercises = baseExercises.slice(0, 3).map((ex) => ({
+      // Build an adapted version of the workout
+      const adaptedExercises = currentWorkout.exercises.slice(0, 3).map((ex) => ({
         ...ex,
         sets: fatigueLevel === "high" ? Math.max(2, ex.sets - 1) : ex.sets,
-        reps: fatigueLevel === "high" ? "10" : ex.reps,
+        reps: fatigueLevel === "high" ? 10 : ex.reps,
         restSeconds: fatigueLevel === "high" ? 90 : 60,
       }));
 
       const adaptedPlan: WorkoutPlan = {
-        ...activeWorkout,
+        ...currentWorkout,
         durationMinutes: availableTime,
-        intensity: fatigueLevel === "high" ? "เบาลง (Deload)" : "ปานกลาง (Adapted)",
+        intensity: fatigueLevel === "high" ? "ปานกลาง-เบา (Deload)" : "ปานกลาง (Adapted)",
         isAdapted: true,
-        coachNote: `ปรับเวลาเหลือ ${availableTime} นาที ลดความล้า (${fatigueLevel === "high" ? "ลดจำนวนเซ็ตลง" : "เน้นโฟกัสท่าหลัก"}) เพื่อความต่อเนื่อง`,
+        coachNote: `ปรับลดเวลาเหลือ ${availableTime} นาที และลดความเข้มข้นเนื่องจากระดับความล้า (${fatigueLevel === "high" ? "ล้ามาก" : "ปานกลาง"}) เพื่อป้องกันการบาดเจ็บ`,
         exercises: adaptedExercises,
       };
 
       setIsGenerating(false);
-      applyHandler(adaptedPlan);
+      onApplyAdaptedWorkout(adaptedPlan);
       onClose();
     }, 600);
   };
@@ -76,10 +69,10 @@ export const AdaptiveWorkoutModal: React.FC<AdaptiveWorkoutModalProps> = ({
             </div>
             <div>
               <h3 className="text-sm font-bold text-white">
-                ปรับตารางออกกำลังกายวันนี้ (Adaptive AI)
+                ปรับโปรแกรมด่วน (Adaptive AI)
               </h3>
               <p className="text-[11px] text-slate-400">
-                ปรับตามเวลา ความเมื่อยล้า และอุปกรณ์ที่มี
+                โค้ชจะปรับลดเวลาและเซ็ตตามสภาพร่างกายวันนี้
               </p>
             </div>
           </div>
@@ -96,13 +89,13 @@ export const AdaptiveWorkoutModal: React.FC<AdaptiveWorkoutModalProps> = ({
           {/* Fatigue level selection */}
           <div>
             <label className="text-xs font-bold text-slate-800 block mb-1.5">
-              1. ระดับความล้าของร่างกายวันนี้
+              1. ระดับความเหนื่อยล้า / ปวดเมื่อยวันนี้:
             </label>
             <div className="grid grid-cols-3 gap-2">
               {[
-                { id: "low", label: "ฟิตเต็มที่", desc: "พร้อมลุยหนัก", emoji: "⚡" },
-                { id: "medium", label: "ล้าปานกลาง", desc: "ปกติ", emoji: "👌" },
-                { id: "high", label: "ล้ามาก / เพลีย", desc: "Deload เบาลง", emoji: "😴" },
+                { id: "low", label: "สดชื่นดี", desc: "ฝึกเต็มที่", emoji: "⚡" },
+                { id: "medium", label: "ล้าปานกลาง", desc: "ลด 1 เซ็ต", emoji: "🌤️" },
+                { id: "high", label: "ล้ามาก/นอนน้อย", desc: "Deload ทันที", emoji: "🌧️" },
               ].map((item) => (
                 <button
                   key={item.id}
@@ -124,7 +117,7 @@ export const AdaptiveWorkoutModal: React.FC<AdaptiveWorkoutModalProps> = ({
           {/* Time Available */}
           <div>
             <label className="text-xs font-bold text-slate-800 block mb-1.5">
-              2. เวลาที่คุณมีวันนี้
+              2. มีเวลาออกกำลังกายวันนี้กี่นาที?
             </label>
             <div className="grid grid-cols-3 gap-2">
               {[20, 30, 45].map((time) => (
@@ -147,16 +140,16 @@ export const AdaptiveWorkoutModal: React.FC<AdaptiveWorkoutModalProps> = ({
           {/* Equipment situation */}
           <div>
             <label className="text-xs font-bold text-slate-800 block mb-1.5">
-              3. อุปกรณ์ที่คุณใช้ได้
+              3. อุปกรณ์ที่มีในมือตอนนี้:
             </label>
             <select
               value={equipmentConstraint}
               onChange={(e) => setEquipmentConstraint(e.target.value)}
               className="w-full text-xs p-2.5 rounded-2xl border border-slate-200 bg-white text-slate-800 focus:outline-none focus:border-emerald-500"
             >
-              <option value="full_gym">ครบชุด (Gym)</option>
-              <option value="dumbbells_only">ดัมเบลอย่างเดียว (Dumbbells Only)</option>
-              <option value="bodyweight_only">บอดี้เวท / โรงแรม (Bodyweight / Hotel)</option>
+              <option value="full_gym">ครบชุดตามปกติ (Gym)</option>
+              <option value="dumbbells_only">มีแค่ดัมเบลคู่เดียว (Dumbbells Only)</option>
+              <option value="bodyweight_only">บอดี้เวท ไม่ใช้อุปกรณ์ (Bodyweight / Hotel)</option>
             </select>
           </div>
 
@@ -164,7 +157,7 @@ export const AdaptiveWorkoutModal: React.FC<AdaptiveWorkoutModalProps> = ({
           <div className="bg-emerald-50 p-3 rounded-2xl border border-emerald-100 flex items-start gap-2">
             <Sparkles className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
             <p className="text-[11px] text-emerald-900 leading-relaxed">
-              AI จะคัดเลือกเฉพาะท่าหลัก Compound และตัดท่าเสริมออก เพื่อให้ได้ประโยชน์สูงสุดในเวลา {availableTime} นาที
+              AI จะคัดเลือกเฉพาะท่า Compound และปรับจำนวนเซ็ตให้จบใน {availableTime} นาที เพื่อให้กล้ามเนื้อได้รับการกระตุ้นโดยไม่เสี่ยงบาดเจ็บ
             </p>
           </div>
         </div>
@@ -184,11 +177,11 @@ export const AdaptiveWorkoutModal: React.FC<AdaptiveWorkoutModalProps> = ({
             className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-2xl text-xs transition-all shadow-md flex items-center justify-center gap-2"
           >
             {isGenerating ? (
-              <span>กำลังคำนวณ...</span>
+              <span>กำลังคำนวณแผนใหม่...</span>
             ) : (
               <>
                 <Check className="w-4 h-4 text-emerald-400" />
-                <span>ใช้ตารางที่ปรับแล้ว</span>
+                <span>ยืนยันและเริ่มโปรแกรมปรับตัว</span>
               </>
             )}
           </button>

@@ -2,30 +2,40 @@ import React, { useState, useRef, useEffect } from "react";
 import {
   X,
   Send,
+  Camera,
+  Image as ImageIcon,
   Sparkles,
   Dumbbell,
   Utensils,
   Moon,
-  Footprints,
-  ShieldCheck,
-  CheckCircle2,
-  AlertCircle,
-  HelpCircle,
-  Smile,
-  Zap,
+  ChevronDown,
+  ChevronUp,
+  LayoutGrid,
 } from "lucide-react";
-import { LineMessage, UserProfile, WorkoutPlan, NutritionData, RecoveryData } from "../types";
+import {
+  ChatMessage,
+  WorkoutPlan,
+  NutritionData,
+  FitnessStatus,
+  UserProfile,
+} from "../types";
+import { LineRichMenu } from "./LineRichMenu";
 
 interface LineBotChatModalProps {
   isOpen: boolean;
   onClose: () => void;
-  messages: LineMessage[];
+  messages: ChatMessage[];
   onSendMessage: (text: string) => void;
-  profile: UserProfile;
+  onSendImage?: (file: File) => void;
   workout: WorkoutPlan;
   nutrition: NutritionData;
-  recovery: RecoveryData;
-  onQuickAction?: (action: string) => void;
+  status: FitnessStatus;
+  profile: UserProfile;
+  onOpenWorkout: () => void;
+  onOpenNutrition: () => void;
+  onOpenRecovery: () => void;
+  onOpenAdapt: () => void;
+  onOpenRichMenuStudio?: () => void;
 }
 
 export const LineBotChatModal: React.FC<LineBotChatModalProps> = ({
@@ -33,22 +43,25 @@ export const LineBotChatModal: React.FC<LineBotChatModalProps> = ({
   onClose,
   messages,
   onSendMessage,
-  profile,
+  onSendImage,
   workout,
   nutrition,
-  recovery,
-  onQuickAction,
+  status,
+  profile,
+  onOpenWorkout,
+  onOpenNutrition,
+  onOpenRecovery,
+  onOpenAdapt,
+  onOpenRichMenuStudio,
 }) => {
   const [inputText, setInputText] = useState("");
+  const [isRichMenuOpen, setIsRichMenuOpen] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen) {
-      scrollToBottom();
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages, isOpen]);
 
@@ -61,74 +74,104 @@ export const LineBotChatModal: React.FC<LineBotChatModalProps> = ({
     setInputText("");
   };
 
-  const quickButtons = [
-    { label: "✅ รายงานการซ้อมวันนี้", action: "report_workout" },
-    { label: "🍱 แคลอรี่ & โปรตีนวันนี้", action: "check_nutrition" },
-    { label: "😴 อาการล้า / นอนน้อย ปรับตารางได้ไหม?", action: "report_fatigue" },
-    { label: "🎯 สรุปโปรแกรม 3 เดือนของฉัน", action: "summary_3months" },
-  ];
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0] && onSendImage) {
+      onSendImage(e.target.files[0]);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-2 sm:p-4 animate-in fade-in duration-200">
-      <div className="w-full max-w-lg h-[92vh] max-h-[750px] rounded-3xl bg-[#7288a2] shadow-2xl border border-slate-700/50 overflow-hidden flex flex-col">
+      <div className="w-full max-w-md h-[95vh] sm:h-[650px] rounded-3xl bg-[#849EB9] shadow-2xl border border-slate-700 overflow-hidden flex flex-col">
         {/* LINE Chat Header */}
-        <div className="bg-[#2c3e50] text-white p-3.5 px-4 flex items-center justify-between shadow-sm">
+        <div className="bg-[#243447] text-white px-4 py-3 flex items-center justify-between shadow-xs z-10">
           <div className="flex items-center gap-3">
             <div className="relative">
-              <div className="w-10 h-10 rounded-full bg-[#06C755] flex items-center justify-center font-bold text-white shadow-xs">
-                FC
+              <div className="w-10 h-10 rounded-full bg-emerald-500 p-0.5 overflow-hidden">
+                <img
+                  src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80"
+                  alt="Coach Avatar"
+                  className="w-full h-full rounded-full object-cover"
+                />
               </div>
-              <span className="absolute bottom-0 right-0 w-3 h-3 bg-[#06C755] rounded-full border-2 border-[#2c3e50]" />
+              <span className="absolute bottom-0 right-0 w-3 h-3 bg-[#06C755] rounded-full border-2 border-[#243447]" />
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <h3 className="text-sm font-bold text-white">FitCoach Official</h3>
+                <h3 className="text-sm font-bold text-white">FitCoach AI (Official)</h3>
                 <span className="text-[10px] bg-[#06C755] text-white px-1.5 py-0.2 rounded font-semibold">
-                  AI TRAINER
+                  BOT
                 </span>
               </div>
               <p className="text-[11px] text-slate-300">
-                พร้อมประกบและตอบคำถาม 24 ชม.
+                โค้ชส่วนตัว • โภชนาการและการออกกำลังกาย
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-black/20 hover:bg-black/30 text-white flex items-center justify-center transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1">
+            {onOpenRichMenuStudio && (
+              <button
+                onClick={onOpenRichMenuStudio}
+                title="แก้ไข Rich Menu ใน Studio"
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-emerald-300 hover:text-white flex items-center justify-center transition-colors"
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
-        {/* LINE Chat Messages Area */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#8ca0b8]">
+        {/* Chat Messages Body */}
+        <div className="flex-1 p-3 overflow-y-auto space-y-3 bg-[#7289A0]/20">
+          {/* Chat start greeting */}
+          <div className="text-center my-2">
+            <span className="text-[10px] bg-black/20 text-white px-3 py-1 rounded-full">
+              {new Intl.DateTimeFormat("th-TH", {
+                weekday: "long",
+                day: "numeric",
+                month: "long",
+                year: "numeric",
+              }).format(new Date())}
+            </span>
+          </div>
+
           {messages.map((msg) => {
             const isUser = msg.sender === "user";
             return (
               <div
                 key={msg.id}
-                className={`flex gap-2.5 ${isUser ? "justify-end" : "justify-start"}`}
+                className={`flex gap-2 items-end ${isUser ? "justify-end" : "justify-start"}`}
               >
                 {!isUser && (
-                  <div className="w-8 h-8 rounded-full bg-[#06C755] text-white font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
-                    FC
+                  <div className="w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-[10px] shrink-0 mb-1">
+                    AI
                   </div>
                 )}
-                <div className="max-w-[78%] flex flex-col">
-                  {/* Message Bubble */}
-                  <div
-                    className={`p-3 rounded-2xl text-xs leading-relaxed shadow-sm relative ${
-                      isUser
-                        ? "bg-[#8de866] text-slate-900 rounded-tr-none"
-                        : "bg-white text-slate-800 rounded-tl-none border border-black/5"
-                    }`}
-                  >
-                    <p className="whitespace-pre-line">{msg.text}</p>
-                  </div>
-                  {/* Timestamp */}
+                <div
+                  className={`max-w-[78%] rounded-2xl p-3 text-xs leading-relaxed shadow-xs ${
+                    isUser
+                      ? "bg-[#06C755] text-white rounded-br-xs"
+                      : "bg-white text-slate-800 rounded-bl-xs"
+                  }`}
+                >
+                  {/* Attached photo preview if any */}
+                  {msg.image && (
+                    <img
+                      src={msg.image}
+                      alt="Attached"
+                      className="rounded-xl mb-2 max-h-48 w-full object-cover"
+                    />
+                  )}
+                  <p className="whitespace-pre-line">{msg.text}</p>
                   <span
-                    className={`text-[9px] text-white/80 mt-1 px-1 ${
-                      isUser ? "text-right" : "text-left"
+                    className={`text-[9px] block text-right mt-1 ${
+                      isUser ? "text-emerald-100" : "text-slate-400"
                     }`}
                   >
                     {msg.timestamp}
@@ -140,41 +183,81 @@ export const LineBotChatModal: React.FC<LineBotChatModalProps> = ({
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Quick Suggestion Chips */}
-        <div className="bg-[#f2f4f7] border-t border-slate-200 p-2 overflow-x-auto flex gap-1.5 scrollbar-none">
-          {quickButtons.map((btn, idx) => (
-            <button
-              key={idx}
-              type="button"
-              onClick={() => {
-                onSendMessage(btn.label);
-                if (onQuickAction) onQuickAction(btn.action);
-              }}
-              className="px-2.5 py-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-full text-[11px] whitespace-nowrap font-medium transition-colors shadow-2xs shrink-0 active:scale-95"
-            >
-              {btn.label}
-            </button>
-          ))}
+        {/* Rich Menu Toggle Bar */}
+        <div className="bg-[#1E293B] px-3 py-1.5 flex items-center justify-between text-[11px] text-slate-300 border-t border-slate-700">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-[#06C755]" />
+            <span>LINE Rich Menu (2,500 × 1,686 px Standard Grid)</span>
+          </div>
+          <button
+            onClick={() => setIsRichMenuOpen(!isRichMenuOpen)}
+            className="flex items-center gap-1 text-[11px] text-emerald-400 hover:text-emerald-300 font-semibold cursor-pointer"
+          >
+            <span>{isRichMenuOpen ? "ซ่อนเมนู" : "เปิดเมนู"}</span>
+            {isRichMenuOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+          </button>
         </div>
 
-        {/* Chat Input Bar */}
+        {/* Realistic LINE Rich Menu Component */}
+        {isRichMenuOpen && (
+          <LineRichMenu
+            onSelectAction={(actionKey) => {
+              if (actionKey === "workout") {
+                onSendMessage("ขอเริ่มดูโปรแกรมออกกำลังกายวันนี้");
+                onOpenWorkout();
+              } else if (actionKey === "nutrition") {
+                onSendMessage("ขอเปิดบันทึกโภชนาการและแคลอรี่");
+                onOpenNutrition();
+              } else if (actionKey === "recovery") {
+                onSendMessage("ขอดูรายงานการนอนหลับและการฟื้นตัว");
+                onOpenRecovery();
+              } else if (actionKey === "status") {
+                onSendMessage("ขอดูระดับเรดาร์สมรรถภาพของผมตอนนี้");
+              } else if (actionKey === "coach_tip") {
+                onSendMessage("โค้ช มีคำแนะนำสำหรับวันนี้ไหม?");
+              } else if (actionKey === "adapt") {
+                onSendMessage("วันนี้รู้สึกเพลีย อยากขอปรับโปรแกรมด่วนครับ");
+                onOpenAdapt();
+              }
+            }}
+          />
+        )}
+
+        {/* Input Bar */}
         <form
           onSubmit={handleSend}
-          className="bg-white p-2.5 px-3 flex items-center gap-2 border-t border-slate-200"
+          className="bg-white p-2.5 flex items-center gap-2 border-t border-slate-200"
         >
           <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            accept="image/*"
+            className="hidden"
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            title="ส่งรูปอาหารหรืออุปกรณ์"
+            className="p-2 text-slate-500 hover:text-[#06C755] hover:bg-slate-100 rounded-full transition-colors"
+          >
+            <Camera className="w-5 h-5" />
+          </button>
+
+          <input
             type="text"
+            placeholder="พิมพ์ข้อความคุยกับโค้ช..."
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
-            placeholder="พิมพ์สอบถามโค้ช เช่น 'กินข้าวมันไก่ได้ไหม', 'ล้ามากปรับตาราง'..."
-            className="flex-1 bg-slate-100 hover:bg-slate-200/70 focus:bg-white text-xs px-3 py-2 rounded-full border border-slate-200 focus:outline-none focus:border-[#06C755] text-slate-900 transition-colors"
+            className="flex-1 bg-slate-100 text-slate-800 text-xs py-2 px-3 rounded-full focus:outline-none focus:ring-2 focus:ring-[#06C755]"
           />
+
           <button
             type="submit"
             disabled={!inputText.trim()}
-            className="w-8 h-8 rounded-full bg-[#06C755] hover:bg-[#05b34c] disabled:opacity-40 text-white flex items-center justify-center transition-all shrink-0 active:scale-90"
+            className="p-2 bg-[#06C755] hover:bg-[#05b34c] disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-full transition-colors shadow-xs"
           >
-            <Send className="w-3.5 h-3.5" />
+            <Send className="w-4 h-4" />
           </button>
         </form>
       </div>

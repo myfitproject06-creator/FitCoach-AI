@@ -1,69 +1,88 @@
 import React, { useState } from "react";
 import {
   X,
-  Sparkles,
   ArrowRight,
   ArrowLeft,
-  Check,
-  Dumbbell,
+  Sparkles,
+  CheckCircle2,
   Target,
-  Calendar,
+  Dumbbell,
+  Activity,
+  Heart,
   Clock,
-  HeartPulse,
-  Flame,
-  User,
+  Shield,
+  Zap,
 } from "lucide-react";
-import { UserProfile } from "../types";
+import { UserProfile, OnboardingForm } from "../types";
 
 interface OnboardingModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentProfile: UserProfile;
-  onSaveProfile: (profile: UserProfile) => void;
+  onComplete: (updatedProfile: UserProfile) => void;
 }
 
 export const OnboardingModal: React.FC<OnboardingModalProps> = ({
   isOpen,
   onClose,
   currentProfile,
-  onSaveProfile,
+  onComplete,
 }) => {
-  const [step, setStep] = useState(1);
-  const [formData, setFormData] = useState<UserProfile>({ ...currentProfile });
+  const [step, setStep] = useState<number>(1);
+  const [formData, setFormData] = useState<OnboardingForm>({
+    name: currentProfile.name,
+    gender: (currentProfile.gender as any) || (currentProfile.sex?.toLowerCase() === "female" ? "female" : "male"),
+    age: currentProfile.age,
+    heightCm: currentProfile.heightCm || currentProfile.height || 175,
+    weightKg: currentProfile.weightKg || currentProfile.weight || 70,
+    primaryGoal: currentProfile.primaryGoal || currentProfile.goal || "สร้างกล้ามเนื้อและลดไขมัน",
+    fitnessLevel: currentProfile.fitnessLevel,
+    daysPerWeek: currentProfile.daysPerWeek,
+    preferredLocation: currentProfile.preferredLocation || currentProfile.environment || "Gym",
+    preferredTime: currentProfile.preferredTime,
+    hasInjuries: false,
+    injuryDetails: "",
+    sleepHoursGoal: 8,
+    dailyWaterGoalLiters: 2.5,
+  });
 
   if (!isOpen) return null;
 
-  const handleChange = (field: keyof UserProfile, value: any) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-  };
+  const totalSteps = 4;
 
   const handleNext = () => {
-    if (step < 4) setStep((s) => s + 1);
-    else {
-      onSaveProfile(formData);
-      onClose();
+    if (step < totalSteps) {
+      setStep(step + 1);
+    } else {
+      const updated: UserProfile = {
+        ...currentProfile,
+        ...formData,
+      };
+      onComplete(updated);
     }
   };
 
   const handleBack = () => {
-    if (step > 1) setStep((s) => s - 1);
+    if (step > 1) {
+      setStep(step - 1);
+    }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 animate-in fade-in duration-200">
-      <div className="w-full max-w-lg rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
-        {/* Header */}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+      <div className="w-full max-w-lg rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+        {/* Modal Top Bar */}
         <div className="bg-slate-900 text-white p-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
-              <Target className="w-4 h-4" />
+            <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs">
+              FC
             </div>
             <div>
               <h3 className="text-sm font-bold text-white">
-                ประเมินร่างกาย & เป้าหมาย (FitCoach Setup)
+                แบบประเมินและตั้งค่าโปรไฟล์ AI
               </h3>
               <p className="text-[11px] text-slate-400">
-                ขั้นตอนที่ {step} จาก 4 เพื่อออกแบบโปรแกรมเฉพาะตัวคุณ
+                ขั้นตอนที่ {step} จาก {totalSteps}
               </p>
             </div>
           </div>
@@ -75,299 +94,316 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
           </button>
         </div>
 
-        {/* Stepper Indicator */}
-        <div className="bg-slate-100 h-1.5 w-full">
+        {/* Progress Bar */}
+        <div className="w-full bg-slate-100 h-1.5">
           <div
             className="bg-emerald-500 h-full transition-all duration-300"
-            style={{ width: `${(step / 4) * 100}%` }}
+            style={{ width: `${(step / totalSteps) * 100}%` }}
           />
         </div>
 
-        {/* Content Body */}
-        <div className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1">
+        {/* Modal Form Body */}
+        <div className="p-5 overflow-y-auto space-y-4 flex-1">
+          {/* STEP 1: Basic Info */}
           {step === 1 && (
-            <div className="space-y-3">
-              <h4 className="text-sm font-bold text-slate-900">
-                1. ข้อมูลพื้นฐาน & ร่างกาย
-              </h4>
+            <div className="space-y-4 animate-in fade-in duration-150">
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
-                  ชื่อที่คุณต้องการให้โค้ชเรียก
+                <h4 className="text-base font-bold text-slate-900">
+                  ข้อมูลพื้นฐานของคุณ
+                </h4>
+                <p className="text-xs text-slate-500">
+                  ใช้เพื่อคำนวณอัตราการเผาผลาญ (BMR/TDEE) และสัดส่วนที่เหมาะสม
+                </p>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  ชื่อเล่น หรือชื่อที่ต้องการให้โค้ชเรียก:
                 </label>
                 <input
                   type="text"
                   value={formData.name}
-                  onChange={(e) => handleChange("name", e.target.value)}
-                  placeholder="เช่น บอล, แอน, เมย์"
-                  className="w-full text-xs p-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:outline-none focus:border-emerald-500"
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="เช่น บาส, พลอย, ต้น"
+                  className="w-full text-xs p-2.5 rounded-xl border border-slate-300 bg-white"
                 />
               </div>
-              <div className="grid grid-cols-3 gap-2">
+
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-semibold text-slate-700 block mb-1">
-                    อายุ (ปี)
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    เพศ:
                   </label>
-                  <input
-                    type="number"
-                    value={formData.age || ""}
-                    onChange={(e) => handleChange("age", parseInt(e.target.value, 10) || 0)}
-                    className="w-full text-xs p-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:outline-none focus:border-emerald-500"
-                  />
+                  <select
+                    value={formData.gender}
+                    onChange={(e) => setFormData({ ...formData, gender: e.target.value as any })}
+                    className="w-full text-xs p-2.5 rounded-xl border border-slate-300 bg-white"
+                  >
+                    <option value="male">ชาย</option>
+                    <option value="female">หญิง</option>
+                    <option value="other">อื่นๆ</option>
+                  </select>
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-slate-700 block mb-1">
-                    ส่วนสูง (ซม.)
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    อายุ (ปี):
                   </label>
                   <input
                     type="number"
-                    value={formData.heightCm || formData.height || ""}
-                    onChange={(e) => {
-                      const val = parseInt(e.target.value, 10) || 0;
-                      handleChange("heightCm", val);
-                      handleChange("height", val);
-                    }}
-                    className="w-full text-xs p-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-700 block mb-1">
-                    น้ำหนัก (กก.)
-                  </label>
-                  <input
-                    type="number"
-                    value={formData.weightKg || formData.weight || ""}
-                    onChange={(e) => {
-                      const val = parseInt(e.target.value, 10) || 0;
-                      handleChange("weightKg", val);
-                      handleChange("weight", val);
-                    }}
-                    className="w-full text-xs p-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:outline-none focus:border-emerald-500"
+                    value={formData.age}
+                    onChange={(e) => setFormData({ ...formData, age: Number(e.target.value) })}
+                    className="w-full text-xs p-2.5 rounded-xl border border-slate-300 bg-white"
                   />
                 </div>
               </div>
-              <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
-                  เพศสรีระ
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { id: "male", label: "ชาย" },
-                    { id: "female", label: "หญิง" },
-                  ].map((g) => (
-                    <button
-                      key={g.id}
-                      type="button"
-                      onClick={() => {
-                        handleChange("gender", g.id);
-                        handleChange("sex", g.id);
-                      }}
-                      className={`py-2 rounded-xl text-xs font-semibold border ${
-                        formData.gender === g.id
-                          ? "border-emerald-500 bg-emerald-50 text-emerald-800"
-                          : "border-slate-200 bg-white text-slate-600"
-                      }`}
-                    >
-                      {g.label}
-                    </button>
-                  ))}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    ส่วนสูง (ซม.):
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.heightCm}
+                    onChange={(e) => setFormData({ ...formData, heightCm: Number(e.target.value) })}
+                    className="w-full text-xs p-2.5 rounded-xl border border-slate-300 bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    น้ำหนักปัจจุบัน (กก.):
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.weightKg}
+                    onChange={(e) => setFormData({ ...formData, weightKg: Number(e.target.value) })}
+                    className="w-full text-xs p-2.5 rounded-xl border border-slate-300 bg-white"
+                  />
                 </div>
               </div>
             </div>
           )}
 
+          {/* STEP 2: Goals */}
           {step === 2 && (
-            <div className="space-y-3">
-              <h4 className="text-sm font-bold text-slate-900">
-                2. เป้าหมายหลักของคุณ
-              </h4>
+            <div className="space-y-4 animate-in fade-in duration-150">
+              <div>
+                <h4 className="text-base font-bold text-slate-900">
+                  เป้าหมายหลักในการฝึก
+                </h4>
+                <p className="text-xs text-slate-500">
+                  โค้ชจะจัดสัดส่วนแคลอรี่และประเภทการฝึกให้ตรงเป้าหมายนี้
+                </p>
+              </div>
+
               <div className="space-y-2">
                 {[
                   {
-                    id: "vtaper",
-                    title: "สร้างหุ่น V-Taper (ไหล่กว้าง เอวคอด)",
-                    desc: "เน้นกล้ามไหล่ หลัง ปีก และลดรอบเอว เพิ่มความสมส่วน",
+                    id: "สร้างกล้ามเนื้อและรูปร่าง (Hypertrophy)",
+                    title: "สร้างกล้ามเนื้อและรูปร่าง (Hypertrophy)",
+                    desc: "เพิ่มมวลกล้ามเนื้อ แน่นกระชับ สัดส่วนชัดเจน",
+                    emoji: "💪",
                   },
                   {
-                    id: "fatloss",
-                    title: "ลดไขมัน & กระชับสัดส่วน",
-                    desc: "เบิร์นไขมันส่วนเกิน คุมแคลอรี่ รูปร่างเพรียวกระชับ",
+                    id: "ลดไขมัน กระชับสัดส่วน (Fat Loss)",
+                    title: "ลดไขมัน กระชับสัดส่วน (Fat Loss)",
+                    desc: "ลดพุง รูปร่างเพรียวขึ้น พร้อมรักษากล้ามเนื้อ",
+                    emoji: "🔥",
                   },
                   {
-                    id: "muscle",
-                    title: "เพิ่มมวลกล้ามเนื้อ (Lean Bulk)",
-                    desc: "เสริมสร้างกล้ามเนื้อทั่วร่าง เพิ่มพละกำลังความแข็งแกร่ง",
+                    id: "เพิ่มความแข็งแรงและความทนทาน (Strength & Stamina)",
+                    title: "เพิ่มความแข็งแรงและความทนทาน (Strength)",
+                    desc: "ยกได้หนักขึ้น ไม่เหนื่อยง่าย สดชื่นตลอดวัน",
+                    emoji: "⚡",
                   },
                   {
-                    id: "health",
-                    title: "สุขภาพดี & ฟิตร่างกายองค์รวม",
-                    desc: "ลดความดัน เพิ่มความยืดหยุ่น หายใจคล่อง ไม่เหนื่อยง่าย",
+                    id: "สุขภาพองค์รวมและการฟื้นฟู (General Health & Longevity)",
+                    title: "สุขภาพและการมีชีวิตชีวา (General Health)",
+                    desc: "นอนหลับสนิท เคลื่อนไหวคล่องตัว ลดอาการออฟฟิศซินโดรม",
+                    emoji: "🧘",
                   },
-                ].map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => {
-                      handleChange("primaryGoal", item.id);
-                      handleChange("goal", item.title);
-                    }}
-                    className={`w-full p-3 rounded-2xl border text-left transition-all ${
-                      formData.primaryGoal === item.id
-                        ? "border-emerald-500 bg-emerald-50/70 shadow-xs"
-                        : "border-slate-200 hover:bg-slate-50"
+                ].map((g) => (
+                  <div
+                    key={g.id}
+                    onClick={() => setFormData({ ...formData, primaryGoal: g.id })}
+                    className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
+                      formData.primaryGoal === g.id
+                        ? "border-emerald-500 bg-emerald-50/60 shadow-xs"
+                        : "border-slate-200 hover:border-slate-300 bg-white"
                     }`}
                   >
-                    <p className="text-xs font-bold text-slate-900">{item.title}</p>
-                    <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">{item.desc}</p>
-                  </button>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl">{g.emoji}</span>
+                      <div>
+                        <h5 className="text-xs font-bold text-slate-900">{g.title}</h5>
+                        <p className="text-[11px] text-slate-500">{g.desc}</p>
+                      </div>
+                    </div>
+                    {formData.primaryGoal === g.id && (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    )}
+                  </div>
                 ))}
               </div>
             </div>
           )}
 
+          {/* STEP 3: Experience & Routine */}
           {step === 3 && (
-            <div className="space-y-3">
-              <h4 className="text-sm font-bold text-slate-900">
-                3. เวลาและสถานที่ออกกำลังกาย
-              </h4>
+            <div className="space-y-4 animate-in fade-in duration-150">
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
-                  จำนวนวันที่สะดวกฝึกต่อสัปดาห์
-                </label>
-                <div className="grid grid-cols-4 gap-2">
-                  {[3, 4, 5, 6].map((days) => (
-                    <button
-                      key={days}
-                      type="button"
-                      onClick={() => handleChange("daysPerWeek", days)}
-                      className={`py-2 rounded-xl text-xs font-bold border ${
-                        formData.daysPerWeek === days
-                          ? "border-emerald-500 bg-emerald-50 text-emerald-800"
-                          : "border-slate-200 bg-white text-slate-700"
-                      }`}
-                    >
-                      {days} วัน
-                    </button>
-                  ))}
-                </div>
+                <h4 className="text-base font-bold text-slate-900">
+                  ประสบการณ์และตารางชีวิต
+                </h4>
+                <p className="text-xs text-slate-500">
+                  เพื่อให้โปรแกรมเข้ากับกิจวัตรประจำวันของคุณอย่างสมดุล
+                </p>
               </div>
+
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
-                  ระยะเวลาต่อครั้งที่สะดวก
+                <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                  ระดับประสบการณ์ฟิตเนส:
                 </label>
                 <div className="grid grid-cols-3 gap-2">
-                  {[30, 45, 60].map((mins) => (
+                  {["มือใหม่ (Beginner)", "ปานกลาง (Intermediate)", "ชำนาญ (Advanced)"].map((lvl) => (
                     <button
-                      key={mins}
+                      key={lvl}
                       type="button"
-                      onClick={() => handleChange("durationMinutes", mins)}
-                      className={`py-2 rounded-xl text-xs font-bold border ${
-                        formData.durationMinutes === mins
-                          ? "border-emerald-500 bg-emerald-50 text-emerald-800"
+                      onClick={() => setFormData({ ...formData, fitnessLevel: lvl })}
+                      className={`p-2 rounded-xl border text-xs font-semibold transition-all ${
+                        formData.fitnessLevel === lvl
+                          ? "border-slate-900 bg-slate-900 text-white"
                           : "border-slate-200 bg-white text-slate-700"
                       }`}
                     >
-                      {mins} นาที
+                      {lvl.split(" ")[0]}
                     </button>
                   ))}
                 </div>
               </div>
+
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
-                  สถานที่ฝึกเป็นหลัก
+                <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                  สถานที่ออกกำลังกายที่สะดวก:
                 </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { id: "gym", label: "ฟิตเนส / ยิม (มีอุปกรณ์ครบ)" },
-                    { id: "home", label: "ที่บ้าน (ดัมเบล / บอดี้เวท)" },
-                  ].map((loc) => (
+                <div className="grid grid-cols-3 gap-2">
+                  {["ฟิตเนส (Gym)", "ที่บ้าน (Home)", "คอนโด (Condo Gym)"].map((loc) => (
                     <button
-                      key={loc.id}
+                      key={loc}
                       type="button"
-                      onClick={() => {
-                        handleChange("environment", loc.id);
-                        handleChange("preferredLocation", loc.label);
-                      }}
-                      className={`p-2.5 rounded-xl text-xs font-medium border text-left ${
-                        formData.environment === loc.id
-                          ? "border-emerald-500 bg-emerald-50 text-emerald-900"
+                      onClick={() => setFormData({ ...formData, preferredLocation: loc })}
+                      className={`p-2 rounded-xl border text-xs font-semibold transition-all ${
+                        formData.preferredLocation === loc
+                          ? "border-emerald-600 bg-emerald-50 text-emerald-900 font-bold"
                           : "border-slate-200 bg-white text-slate-700"
                       }`}
                     >
-                      {loc.label}
+                      {loc}
                     </button>
                   ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                  ช่วงเวลาที่สะดวกออกกำลังกาย:
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {["เช้า (06:00 - 08:30)", "เย็น (17:30 - 20:00)", "ค่ำ (20:00 เป็นต้นไป)"].map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, preferredTime: t })}
+                      className={`p-2 rounded-xl border text-xs font-semibold transition-all ${
+                        formData.preferredTime === t
+                          ? "border-slate-900 bg-slate-900 text-white"
+                          : "border-slate-200 bg-white text-slate-700"
+                      }`}
+                    >
+                      {t.split(" ")[0]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  จำนวนวันที่ต้องการฝึกต่อสัปดาห์: ({formData.daysPerWeek} วัน)
+                </label>
+                <input
+                  type="range"
+                  min={2}
+                  max={6}
+                  value={formData.daysPerWeek}
+                  onChange={(e) => setFormData({ ...formData, daysPerWeek: Number(e.target.value) })}
+                  className="w-full accent-emerald-600"
+                />
+                <div className="flex justify-between text-[10px] text-slate-400">
+                  <span>2 วัน (เบาๆ)</span>
+                  <span>4 วัน (แนะนำ)</span>
+                  <span>6 วัน (เข้มข้น)</span>
                 </div>
               </div>
             </div>
           )}
 
+          {/* STEP 4: Safety & Review */}
           {step === 4 && (
-            <div className="space-y-3">
-              <h4 className="text-sm font-bold text-slate-900">
-                4. การแจ้งเตือน & ข้อจำกัด
-              </h4>
+            <div className="space-y-4 animate-in fade-in duration-150">
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
-                  เวลานัดซ้อมที่ให้โค้ชทักเตือนผ่าน LINE ประจำวัน
-                </label>
-                <input
-                  type="time"
-                  value={formData.lineNotificationTime || "18:00"}
-                  onChange={(e) => handleChange("lineNotificationTime", e.target.value)}
-                  className="w-full text-xs p-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:outline-none focus:border-emerald-500"
-                />
-                <span className="text-[10px] text-slate-500 mt-1 block">
-                  * โค้ชจะส่งข้อความล่วงหน้า 15 นาทีก่อนเวลาที่คุณเลือก
-                </span>
+                <h4 className="text-base font-bold text-slate-900">
+                  ความปลอดภัยและสุขภาพ
+                </h4>
+                <p className="text-xs text-slate-500">
+                  แจ้งข้อจำกัดทางกายภาพเพื่อหลีกเลี่ยงท่าที่เสี่ยงบาดเจ็บ
+                </p>
               </div>
-              <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
-                  มีอาการบาดเจ็บหรือข้อห้ามหรือไม่?
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleChange("hasInjuries", false)}
-                    className={`py-2 rounded-xl text-xs font-semibold border ${
-                      !formData.hasInjuries
-                        ? "border-emerald-500 bg-emerald-50 text-emerald-800"
-                        : "border-slate-200 bg-white text-slate-600"
-                    }`}
-                  >
-                    ไม่มี (ร่างกายปกติ)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleChange("hasInjuries", true)}
-                    className={`py-2 rounded-xl text-xs font-semibold border ${
-                      formData.hasInjuries
-                        ? "border-rose-500 bg-rose-50 text-rose-800"
-                        : "border-slate-200 bg-white text-slate-600"
-                    }`}
-                  >
-                    มีอาการบาดเจ็บ
-                  </button>
+
+              <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800">
+                    มีอาการบาดเจ็บ หรือเจ็บข้อต่อหรือไม่?
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={formData.hasInjuries}
+                    onChange={(e) => setFormData({ ...formData, hasInjuries: e.target.checked })}
+                    className="accent-emerald-600 w-4 h-4 rounded"
+                  />
                 </div>
                 {formData.hasInjuries && (
                   <input
                     type="text"
-                    placeholder="เช่น ปวดหลังส่วนล่าง, เจ็บเข่าขวา"
-                    value={formData.injuryDetails || ""}
-                    onChange={(e) => handleChange("injuryDetails", e.target.value)}
-                    className="w-full text-xs p-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 mt-2 focus:outline-none focus:border-emerald-500"
+                    placeholder="เช่น เจ็บเข่าขวา, ปวดหลังส่วนล่าง"
+                    value={formData.injuryDetails}
+                    onChange={(e) => setFormData({ ...formData, injuryDetails: e.target.value })}
+                    className="w-full text-xs p-2 rounded-xl border border-slate-300 bg-white"
                   />
                 )}
+              </div>
+
+              {/* Ready to generate AI blueprint */}
+              <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-200 text-center space-y-2">
+                <div className="w-10 h-10 rounded-full bg-emerald-600 text-white flex items-center justify-center mx-auto shadow-sm">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <h5 className="text-sm font-bold text-emerald-950">
+                  พร้อมสร้างแผนส่วนตัวของคุณแล้ว!
+                </h5>
+                <p className="text-xs text-emerald-800 leading-relaxed max-w-xs mx-auto">
+                  ระบบ AI จะนำข้อมูลสัดส่วน {formData.weightKg} กก. / {formData.heightCm} ซม. และเป้าหมายไปคำนวณโปรแกรมฝึกและโภชนาการแบบแม่นยำ
+                </p>
               </div>
             </div>
           )}
         </div>
 
-        {/* Footer */}
+        {/* Modal Bottom Actions */}
         <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
           {step > 1 ? (
             <button
               onClick={handleBack}
-              className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold rounded-xl text-xs transition-colors flex items-center gap-1"
+              className="px-3.5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold rounded-2xl text-xs transition-colors flex items-center gap-1"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>ย้อนกลับ</span>
@@ -375,11 +411,13 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
           ) : (
             <div />
           )}
+
           <button
+            id="onboarding-next-btn"
             onClick={handleNext}
-            className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs transition-all flex items-center gap-1.5 shadow-md active:scale-95"
+            className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-2xl text-xs transition-all shadow-md flex items-center gap-1.5"
           >
-            <span>{step === 4 ? "สร้างโปรแกรมด้วย AI" : "ถัดไป"}</span>
+            <span>{step === totalSteps ? "ยืนยันและสร้างโปรแกรม" : "ถัดไป"}</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
