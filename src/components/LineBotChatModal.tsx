@@ -20,6 +20,8 @@ import {
   UserProfile,
 } from "../types";
 import { LineRichMenu } from "./LineRichMenu";
+import { CoachMessage } from "./coach/CoachMessage";
+import { CoachAction } from "../types";
 
 interface LineBotChatModalProps {
   isOpen: boolean;
@@ -77,6 +79,34 @@ export const LineBotChatModal: React.FC<LineBotChatModalProps> = ({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0] && onSendImage) {
       onSendImage(e.target.files[0]);
+    }
+  };
+
+  const handleCoachAction = (action: CoachAction) => {
+    switch (action.actionType) {
+      case "start_workout":
+      case "view_plan":
+      case "apply_program":
+        onOpenWorkout();
+        break;
+      case "log_food":
+        onOpenNutrition();
+        break;
+      case "cannot_do":
+        onOpenAdapt();
+        break;
+      case "snooze":
+        onSendMessage("ขอเลื่อนการออกกำลังกายออกไปก่อนครับ");
+        break;
+      case "clear_penalty":
+        onSendMessage("ผมทำภารกิจชดเชยเรียบร้อยแล้วครับ");
+        break;
+      case "confirm":
+        onSendMessage("ยืนยันครับ");
+        break;
+      case "edit":
+        onSendMessage("ขอแก้ไขข้อมูลนี้ครับ");
+        break;
     }
   };
 
@@ -168,14 +198,21 @@ export const LineBotChatModal: React.FC<LineBotChatModalProps> = ({
                       className="rounded-xl mb-2 max-h-48 w-full object-cover"
                     />
                   )}
-                  <p className="whitespace-pre-line">{msg.text}</p>
-                  <span
-                    className={`text-[9px] block text-right mt-1 ${
-                      isUser ? "text-emerald-100" : "text-slate-400"
-                    }`}
-                  >
-                    {msg.timestamp}
-                  </span>
+                  {isUser ? (
+                    <>
+                      <p className="whitespace-pre-line">{msg.text}</p>
+                      <span className="text-[9px] block text-right mt-1 text-emerald-100">
+                        {msg.timestamp}
+                      </span>
+                    </>
+                  ) : (
+                    <CoachMessage
+                      response={msg.coachResponse}
+                      fallbackText={msg.text}
+                      timestamp={msg.timestamp}
+                      onAction={handleCoachAction}
+                    />
+                  )}
                 </div>
               </div>
             );
