@@ -18,16 +18,33 @@ export interface Exercise {
   targetMuscle?: string;
 }
 
+export interface WorkoutDay {
+  id: string;
+  dayName: string;
+  focus: string;
+  estimatedDurationMinutes?: number;
+  estimatedCalories?: number;
+  isCompleted?: boolean;
+  isRestDay?: boolean;
+  exercises: Exercise[];
+}
+
+export type ExerciseItem = Exercise;
+
 export interface WorkoutPlan {
   id: string;
   title?: string;
   titleTh?: string;
+  name?: string;
+  currentWeek?: number;
+  totalWeeks?: number;
   dayName?: string;
   focusArea?: string;
   durationMinutes: number;
   intensity: string;
   split?: string;
   exercises: Exercise[];
+  days?: WorkoutDay[];
   isCompleted?: boolean;
   isAdapted?: boolean;
   adaptationReason?: string;
@@ -68,10 +85,15 @@ export interface RecoveryData {
   targetSleepHours?: string;
   quality: string;
   score?: number;
+  readinessScore?: number;
+  sleepQualityScore?: number;
+  rpeScore?: number;
+  steps?: number;
+  hrvMs?: number;
   sleepStart?: string;
   sleepEnd?: string;
-  fatigueLevel?: "ต่ำ" | "ปานกลาง" | "สูง" | string;
-  muscleSoreness?: "ไม่มี" | "เล็กน้อย" | "ปานกลาง" | "ระบมมาก" | string;
+  fatigueLevel?: " " | " " | " " | string;
+  muscleSoreness?: " " | " " | " " | " " | string;
   restingHeartRate?: number;
   coachInsight?: string;
   isFromGoogleHealth?: boolean;
@@ -93,6 +115,13 @@ export interface FitnessStatus {
   level: number;
   xp: number;
   nextLevelXp: number;
+  currentLevel?: number;
+  currentExp?: number;
+  nextLevelExp?: number;
+  totalWorkoutsCompleted?: number;
+  totalCaloriesBurned?: number;
+  rankTitle?: string;
+  badges?: any[];
   rank: "S" | "A" | "B" | "C" | "D" | string;
   strength: number;    // STR
   endurance: number;   // END
@@ -110,6 +139,8 @@ export interface FitnessStatus {
 
 export interface UserProfile {
   name: string;
+  pictureUrl?: string;
+  userId?: string;
   goal: string;
   customGoalText?: string;
   primaryGoal?: string;
@@ -273,4 +304,67 @@ export interface GoogleHealthSyncState {
   rawSleepMinutes?: number;
   rawSleepStart?: string;
   rawSleepEnd?: string;
+}
+
+
+// ===== Coach Plan (โปรแกรมที่โค้ช AI สร้าง/ปรับ และใช้ทำเช็คลิสต์-ปฏิทิน) =====
+export type PlanDayStatus = "planned" | "done" | "skipped" | "moved";
+
+export interface PlanExercise {
+  name: string;
+  nameTh?: string;
+  sets: number;
+  reps: string;
+  restSeconds?: number;
+  suggestedWeight?: string;
+  note?: string;
+}
+
+export interface PlanDay {
+  date: string; // YYYY-MM-DD (เวลาไทย)
+  title: string;
+  focus?: string;
+  isRestDay?: boolean;
+  durationMinutes?: number;
+  exercises: PlanExercise[];
+  status: PlanDayStatus;
+  coachNote?: string;
+  completedAt?: string;
+}
+
+export interface PlanPhase {
+  name: string;
+  weeks: number;
+  focus: string;
+}
+
+export interface CoachPlan {
+  id: string;
+  title: string;
+  goal: string;
+  startDate: string;
+  endDate: string;
+  phases: PlanPhase[];
+  days: PlanDay[]; // ลงรายละเอียดเฉพาะช่วงที่ใกล้ถึง (rolling)
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkoutLog {
+  id: string;
+  date: string;
+  completed: boolean;
+  rpe?: number; // 1-10
+  feeling?: string;
+  notes?: string;
+  exercises?: { name: string; weight?: string; reps?: string }[];
+  createdAt: string;
+}
+
+// ข้อมูลที่โค้ชถามผ่านแชท (ซักประวัติ)
+export interface CoachProfileExtra {
+  occupation?: string;
+  workEndTime?: string;
+  preferredWorkoutTime?: string;
+  notes?: string;
 }
