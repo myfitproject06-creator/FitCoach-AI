@@ -1,5 +1,4 @@
-// server.ts - เซิร์ฟเวอร์ Express หลัก รองรับ LINE OAuth 2.1, LINE Webhook,
-// User Data API, Vite Middleware และ Phase 4 Real Coach Data Integration
+// server.ts - เซิร์ฟเวอร์ Express หลัก รองรับ LINE OAuth 2.1, LINE Webhook, User Data API และ Vite Middleware
 import express from "express";
 import path from "path";
 import cookieParser from "cookie-parser";
@@ -8,16 +7,16 @@ import { authRouter, getMeHandler, requireAuth, type AuthenticatedRequest } from
 import { googleFitRouter } from "./google-fit";
 import { lineWebhookHandler } from "./line-webhook";
 import { getUserData, saveUserData } from "./db";
-import { generateCoachResponseStructured } from "./coach-ai";
+import { generateCoachResponseStructured, type HistoryItem } from "./coach-ai";
 
 async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;
 
-  // 1. ตั้งค่า trust proxy สำหรับ Render และ Reverse Proxy
+  // 1. Render / Reverse Proxy
   app.set("trust proxy", 1);
 
-  // 2. Middleware บันทึก rawBody สำหรับตรวจสอบ LINE Webhook Signature
+  // 2. rawBody สำหรับ LINE Webhook Signature
   app.use(
     express.json({
       verify: (req: any, _res, buf) => {
@@ -27,7 +26,7 @@ async function startServer() {
   );
   app.use(express.urlencoded({ extended: true }));
 
-  // 3. Cookie Parser พร้อมเซ็น Cookie ด้วย SESSION_SECRET
+  // 3. Signed cookies สำหรับ LINE Session
   const sessionSecret =
     process.env.SESSION_SECRET ||
     "fitcoach_default_session_secret_change_in_production";
@@ -37,7 +36,6 @@ async function startServer() {
   // API Routes (ต้องอยู่ก่อน Vite Middleware เสมอ)
   // ----------------------------------------------------
 
-  // Route ตรวจสอบสถานะเซิร์ฟเวอร์
   app.get("/api/health", (_req, res) => {
     res.json({
       status: "ok",
@@ -49,16 +47,19 @@ async function startServer() {
   // LINE Login OAuth Routes
   app.use("/auth", authRouter);
 
-  // Google Fit 1-Click OAuth & Sync Routes
+  // Google Fit OAuth & Sync Routes
   app.use("/", googleFitRouter);
 
-  // ข้อมูลผู้ใช้ที่กำลังล็อกอินอยู่
+  // Session status
   app.get("/api/me", getMeHandler);
 
-  // LINE Bot Webhook (ห้ามเปลี่ยนชื่อ route เด็ดขาด)
+  // LINE Bot Webhook
   app.post("/webhook", lineWebhookHandler);
 
-  // ดึงข้อมูลฟิตเนสของผู้ใช้ที่ล็อกอินอยู่
+  // ----------------------------------------------------
+  // User Data
+  // ----------------------------------------------------
+
   app.get(
     "/api/user/data",
     requireAuth,
@@ -76,7 +77,6 @@ async function startServer() {
     }
   );
 
-  // บันทึกหรืออัปเดตข้อมูลฟิตเนสของผู้ใช้
   app.post(
     "/api/user/data",
     requireAuth,
@@ -95,7 +95,6 @@ async function startServer() {
     }
   );
 
-  // ถ่ายโอนข้อมูลจาก localStorage ขึ้นสู่ฐานข้อมูลตอนล็อกอินครั้งแรก
   app.post(
     "/api/user/migrate",
     requireAuth,
@@ -104,6 +103,7 @@ async function startServer() {
         const userId = req.user!.userId;
         const existing = await getUserData(userId);
 
+        // ย้ายข้อมูล localStorage ขึ้น server เฉพาะกรณี server ยังไม่มี profile
         if (!existing?.profile?.name && req.body.profile) {
           console.log(
             `[API Migration] กำลังย้ายข้อมูล LocalStorage ขึ้น Server สำหรับ userId=${userId}`
@@ -117,7 +117,6 @@ async function startServer() {
             activity: req.body.activity,
             status: req.body.status,
             accountability: req.body.accountability,
-            messages: req.body.messages,
           });
 
           return res.json({
@@ -134,27 +133,27 @@ async function startServer() {
         });
       } catch (err) {
         console.error("[API Migration] การย้ายข้อมูลล้มเหลว:", err);
-        return res.status(500).json({
-          success: false,
-          error: "Migration failed",
-        });
+        return res
+          .status(500)
+          .json({ success: false, error: "Migration failed" });
       }
     }
   );
 
   // ----------------------------------------------------
-  // Phase 4 — REAL COACH DATA INTEGRATION
+  // AI Coach Chat
+  //
+  // Phase 4:
+  // - อ่าน Session Cookie แบบ signed โดยไม่บังคับ login
+  // - ถ้ามี session -> ใช้ Firebase เป็น source of truth
+  // - ส่ง coachPlan / workoutLogs / coachProfile เข้า Coach AI
+  // - เปิดใช้งาน Coach Tools ด้วย userId จริง
+  // - เก็บบทสนทนาล่าสุดกลับ Firebase
+  //
+  // Guest mode ยังทำงานได้เหมือนเดิม เพราะไม่มี session ก็ใช้
+  // context ที่ frontend ส่งมาแทน
   // ----------------------------------------------------
-  //
-  // Web Chat จะใช้ข้อมูลจริงจาก Firebase เมื่อผู้ใช้ Login:
-  // profile / workout / nutrition / recovery / activity / status /
-  // accountability / coachPlan / workoutLogs / coachProfile / messages
-  //
-  // และส่ง userId เข้า Coach Engine เพื่อเปิดใช้งาน Coach Tools
-  // เช่น save_plan, upsert_plan_days, log_workout, update_profile_info
-  //
-  // Guest mode ยังรองรับการส่ง context มาจาก frontend เหมือนเดิม
-  // ----------------------------------------------------
+
   app.post(
     "/api/ai/coach-chat",
     async (req: AuthenticatedRequest, res) => {
@@ -167,131 +166,188 @@ async function startServer() {
           nutritionData,
           recoveryData,
           history,
-        } = req.body || {};
+        } = req.body ?? {};
 
         if (!message || typeof message !== "string") {
-          return res.status(400).json({
-            error: "ต้องระบุข้อความ message",
-          });
+          return res
+            .status(400)
+            .json({ error: "ต้องระบุข้อความ message" });
         }
 
-        // ถ้ามี session ให้ใช้ Firebase เป็น source of truth
-        // ไม่ใช้ข้อมูลเก่าจาก browser เป็นหลัก
-        let userData: Awaited<ReturnType<typeof getUserData>> = null;
-        let authenticatedUserId: string | undefined;
+        // IMPORTANT:
+        // ไม่รับ userId จาก frontend เพื่อป้องกันการอ่าน/เขียนข้อมูลของ user อื่น
+        // ใช้ userId จาก signed LINE session เท่านั้น
+        const rawSession = req.signedCookies?.fitcoach_session;
 
-        try {
-          if (req.user?.userId) {
-            authenticatedUserId = req.user.userId;
-            userData = await getUserData(authenticatedUserId);
+        if (rawSession) {
+          try {
+            const sessionUser = JSON.parse(rawSession);
+
+            if (
+              sessionUser &&
+              typeof sessionUser.userId === "string" &&
+              sessionUser.userId.trim()
+            ) {
+              req.user = sessionUser;
+            }
+          } catch (err) {
+            console.warn(
+              "[AI Coach] fitcoach_session ไม่ถูกต้อง -> ใช้ guest context",
+              err
+            );
           }
-        } catch (dbError) {
-          console.warn(
-            "[API] ไม่สามารถโหลด Real Coach Data จาก Firebase:",
-            dbError
-          );
         }
 
-        const effectiveProfile = userData?.profile || userProfile;
-        const effectiveWorkout = userData?.workout || workoutPlan;
-        const effectiveStatus = userData?.status || fitnessStatus;
-        const effectiveNutrition = userData?.nutrition || nutritionData;
-        const effectiveRecovery = userData?.recovery || recoveryData;
+        const authenticatedUserId = req.user?.userId;
 
-        // ใช้ประวัติจาก Firebase ก่อน ถ้ามี
-        // แล้วเติม history ที่ frontend ส่งมาเพื่อรองรับ guest/ข้อมูลล่าสุด
-        const storedHistory = Array.isArray(userData?.messages)
-          ? userData!.messages
-              .filter((m: any) => m && typeof m.text === "string")
+        // ------------------------------------------------
+        // Authenticated user:
+        // Firebase เป็น source of truth
+        // Guest:
+        // ใช้ context จาก frontend
+        // ------------------------------------------------
+        const userData = authenticatedUserId
+          ? await getUserData(authenticatedUserId)
+          : null;
+
+        const effectiveProfile =
+          userData?.profile || userProfile;
+        const effectiveWorkout =
+          userData?.workout || workoutPlan;
+        const effectiveStatus =
+          userData?.status || fitnessStatus;
+        const effectiveNutrition =
+          userData?.nutrition || nutritionData;
+        const effectiveRecovery =
+          userData?.recovery || recoveryData;
+
+        // ------------------------------------------------
+        // History
+        // coach-ai.ts ต้องการ:
+        // { sender: "user" | "bot" | "coach" | "system", text: string }
+        //
+        // Firebase messages ของ app ใช้ ChatMessage:
+        // { sender, text, timestamp, coachResponse, ... }
+        // จึงต้อง map ให้เป็น HistoryItem ก่อนส่ง Gemini
+        // ------------------------------------------------
+
+        const firebaseHistory: HistoryItem[] = Array.isArray(
+          userData?.messages
+        )
+          ? userData.messages
               .slice(-20)
-              .map((m: any) => ({
-                sender: m.sender,
-                text: m.text,
+              .map((item: any) => ({
+                sender:
+                  item?.sender === "user"
+                    ? "user"
+                    : item?.sender === "system"
+                      ? "system"
+                      : "bot",
+                text:
+                  typeof item?.text === "string"
+                    ? item.text
+                    : typeof item?.content === "string"
+                      ? item.content
+                      : "",
               }))
+              .filter((item) => item.text.trim().length > 0)
           : [];
 
-        const requestHistory = Array.isArray(history)
+        const requestHistory: HistoryItem[] = Array.isArray(history)
           ? history
-              .filter((m: any) => m && typeof m.text === "string")
               .slice(-20)
-              .map((m: any) => ({
-                sender: m.sender,
-                text: m.text,
+              .map((item: any) => ({
+                sender:
+                  item?.sender === "user"
+                    ? "user"
+                    : item?.sender === "system"
+                      ? "system"
+                      : "bot",
+                text:
+                  typeof item?.text === "string"
+                    ? item.text
+                    : typeof item?.content === "string"
+                      ? item.content
+                      : "",
               }))
+              .filter((item) => item.text.trim().length > 0)
           : [];
 
         const combinedHistory =
-          storedHistory.length > 0 ? storedHistory : requestHistory;
+          firebaseHistory.length > 0
+            ? firebaseHistory
+            : requestHistory;
 
-        const coachResponse = await generateCoachResponseStructured(
-          message,
-          {
-            userProfile: effectiveProfile,
-            workoutPlan: effectiveWorkout,
-            fitnessStatus: effectiveStatus,
-            nutritionData: effectiveNutrition,
-            recoveryData: effectiveRecovery,
-            coachPlan: userData?.coachPlan,
-            workoutLogs: userData?.workoutLogs,
-            coachProfile: userData?.coachProfile,
-          },
-          combinedHistory,
-          authenticatedUserId
-        );
+        // ------------------------------------------------
+        // Gemini + Coach Tools
+        // ถ้ามี authenticatedUserId:
+        // save_plan / upsert_plan_days / log_workout /
+        // update_profile_info จะเขียนลง Firebase ได้จริง
+        // ------------------------------------------------
+        const coachResponse =
+          await generateCoachResponseStructured(
+            message,
+            {
+              userProfile: effectiveProfile,
+              workoutPlan: effectiveWorkout,
+              fitnessStatus: effectiveStatus,
+              nutritionData: effectiveNutrition,
+              recoveryData: effectiveRecovery,
+              coachPlan: userData?.coachPlan,
+              workoutLogs: userData?.workoutLogs,
+              coachProfile: userData?.coachProfile,
+            },
+            combinedHistory,
+            authenticatedUserId
+          );
 
-        // เก็บข้อความล่าสุดลง Firebase ทันทีสำหรับผู้ใช้ที่ Login
-        // เพื่อให้ Coach รอบถัดไปมี memory ต่อเนื่องแม้เปิดอุปกรณ์ใหม่
+        // ------------------------------------------------
+        // เก็บบทสนทนาลง Firebase
+        // ------------------------------------------------
         if (authenticatedUserId) {
-          try {
-            const now = new Date().toLocaleTimeString("th-TH", {
-              hour: "2-digit",
-              minute: "2-digit",
-            });
+          const currentMessages = Array.isArray(userData?.messages)
+            ? userData.messages
+            : [];
 
-            const existingMessages = Array.isArray(userData?.messages)
-              ? userData!.messages
-              : [];
+          const now = new Date().toISOString();
 
-            const userMessageRecord = {
-              id: `user-${Date.now()}`,
-              sender: "user" as const,
-              text: message,
-              timestamp: now,
-            };
+          const userMessageRecord = {
+            id: `user-${Date.now()}`,
+            sender: "user",
+            text: message,
+            timestamp: now,
+          };
 
-            const coachMessageRecord = {
-              id: `bot-${Date.now() + 1}`,
-              sender: "bot" as const,
-              text: coachResponse.message,
-              timestamp: now,
-              coachResponse,
-            };
+          const botMessageRecord = {
+            id: `bot-${Date.now()}`,
+            sender: "bot",
+            text: coachResponse.message,
+            timestamp: now,
+            coachResponse,
+          };
 
-            await saveUserData(authenticatedUserId, {
-              messages: [
-                ...existingMessages,
-                userMessageRecord,
-                coachMessageRecord,
-              ].slice(-100),
-            });
-          } catch (saveError) {
-            // ไม่ให้การเก็บ chat history ทำให้คำตอบจาก Coach ล้มเหลว
-            console.warn(
-              "[API] บันทึก Coach conversation ล้มเหลว:",
-              saveError
-            );
-          }
+          const nextMessages = [
+            ...currentMessages,
+            userMessageRecord,
+            botMessageRecord,
+          ].slice(-100);
+
+          await saveUserData(authenticatedUserId, {
+            messages: nextMessages,
+          });
         }
 
         return res.json({
           reply: coachResponse.message,
           coachResponse,
           timestamp: new Date().toISOString(),
-          dataSource: authenticatedUserId ? "firebase" : "frontend",
-          realCoachData: Boolean(userData),
+          dataSource: authenticatedUserId ? "firebase" : "client",
+          realCoachData: Boolean(authenticatedUserId),
+          userIdConnected: Boolean(authenticatedUserId),
         });
       } catch (err) {
         console.error("[API] Coach Chat ล้มเหลว:", err);
+
         return res.status(500).json({
           reply:
             "ขออภัยครับ โค้ชกำลังประมวลผลข้อมูลอยู่ รบกวนลองส่งข้อความใหม่อีกครั้งนะครับ! 💪",
@@ -303,6 +359,7 @@ async function startServer() {
   // ----------------------------------------------------
   // Frontend Asset Handling (Vite / Static)
   // ----------------------------------------------------
+
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -310,7 +367,10 @@ async function startServer() {
     });
 
     app.use(vite.middlewares);
-    console.log("[Server] เปิดใช้งาน Vite Middleware (โหมด Development)");
+
+    console.log(
+      "[Server] เปิดใช้งาน Vite Middleware (โหมด Development)"
+    );
   } else {
     const distPath = path.join(process.cwd(), "dist");
 
@@ -320,9 +380,12 @@ async function startServer() {
       res.sendFile(path.join(distPath, "index.html"));
     });
 
-    console.log("[Server] เสิร์ฟ Production Build จากโฟลเดอร์ dist");
+    console.log(
+      "[Server] เสิร์ฟ Production Build จากโฟลเดอร์ dist"
+    );
   }
 
+  // Start server
   app.listen(PORT, "0.0.0.0", () => {
     console.log(
       `🚀 FitCoach AI เซิร์ฟเวอร์พร้อมทำงานที่ http://0.0.0.0:${PORT}`
@@ -331,5 +394,8 @@ async function startServer() {
 }
 
 startServer().catch((err) => {
-  console.error("FATAL: เซิร์ฟเวอร์ไม่สามารถเริ่มต้นได้:", err);
+  console.error(
+    "FATAL: เซิร์ฟเวอร์ไม่สามารถเริ่มต้นได้:",
+    err
+  );
 });
