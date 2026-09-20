@@ -10,6 +10,7 @@ import type {
   CoachPlan,
   WorkoutLog,
   CoachProfileExtra,
+  CoachResponse,
 } from "./src/types";
 import { COACH_TOOL_DECLARATIONS, executeCoachTool, buildPlanContext, bangkokToday } from "./coach-plan";
 
@@ -44,6 +45,117 @@ export interface HistoryItem {
 }
 
 const MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash";
+
+
+const COACH_RESPONSE_SCHEMA = {
+  type: "object",
+  properties: {
+    message: {
+      type: "string",
+      description: "ข้อความที่ FitCoach พูดกับผู้ใช้ ภาษาไทย กระชับ เป็นธรรมชาติ และไม่ใช้ Markdown",
+    },
+    type: {
+      type: "string",
+      enum: [
+        "chat",
+        "workout",
+        "workout_reminder",
+        "nutrition",
+        "recovery",
+        "daily_summary",
+        "adapted_plan",
+        "new_program",
+        "meal_recorded",
+        "penalty_notice",
+        "profile_update",
+      ],
+    },
+    data: {
+      type: "object",
+      properties: {
+        title: { type: "string" },
+        titleTh: { type: "string" },
+        summary: { type: "string" },
+        durationMinutes: { type: "integer" },
+        intensity: { type: "string" },
+        focus: { type: "string" },
+        tags: { type: "array", items: { type: "string" } },
+        exercises: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              name: { type: "string" },
+              nameTh: { type: "string" },
+              sets: { type: "integer" },
+              reps: { type: "string" },
+              restSeconds: { type: "integer" },
+              suggestedWeight: { type: "string" },
+              note: { type: "string" },
+            },
+            required: ["name"],
+          },
+        },
+        reason: { type: "string" },
+        reminderDate: { type: "string" },
+        reminderTime: { type: "string" },
+        calories: { type: "number" },
+        proteinGrams: { type: "number" },
+        sleepHours: { type: "number" },
+        recoveryScore: { type: "number" },
+        confidence: { type: "number" },
+      },
+    },
+    actions: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          label: { type: "string" },
+          actionType: {
+            type: "string",
+            enum: [
+              "start_workout",
+              "snooze",
+              "cannot_do",
+              "view_plan",
+              "log_food",
+              "apply_program",
+              "clear_penalty",
+              "confirm",
+              "edit",
+            ],
+          },
+          style: {
+            type: "string",
+            enum: ["primary", "secondary", "danger"],
+          },
+        },
+        required: ["id", "label", "actionType"],
+      },
+    },
+  },
+  required: ["message", "type"],
+};
+
+function buildStructuredSystemInstruction(context: CoachContext): string {
+  return `${buildSystemInstruction(context)}
+
+[Phase 1: Structured Response]
+หลังจากทำความเข้าใจผู้ใช้และเรียกเครื่องมือที่จำเป็นแล้ว คำตอบสุดท้ายต้องเป็น JSON ตาม schema ที่ระบบกำหนดเท่านั้น
+ห้ามใส่ Markdown, code fence หรือข้อความนอก JSON
+ฟิลด์ message คือข้อความที่ผู้ใช้จะเห็นโดยตรง ควรเป็นภาษาไทย กระชับ และเป็นธรรมชาติ
+ฟิลด์ type ใช้บอกประเภทของข้อมูลเพื่อให้ UI นำไปสร้าง Card ใน Phase ถัดไป
+ฟิลด์ data ใส่เฉพาะข้อมูลที่เกี่ยวข้องกับ type นั้น ไม่ต้องยัดข้อมูลที่ไม่จำเป็น
+ฟิลด์ actions ใส่เมื่อผู้ใช้ควรมี action ต่อ เช่น เริ่ม workout ดูแผน เลื่อน หรือยืนยัน
+ถ้าเป็นการคุยทั่วไปและไม่มีข้อมูลที่ต้องแสดงเป็น Card ให้ใช้ type = "chat"
+หากสร้างหรือปรับ workout ให้ใส่ exercises ที่จำเป็นใน data และใช้ type = "workout" หรือ "adapted_plan"
+หากตั้งเตือน ให้ใช้ type = "workout_reminder" และใส่ reminderDate/reminderTime ถ้าทราบ
+หากบันทึกอาหาร ให้ใช้ type = "meal_recorded" และใส่ข้อมูลโภชนาการที่ทราบ
+อย่าสร้างค่าตัวเลขที่ผู้ใช้ไม่ได้ให้มา เว้นแต่เป็นค่าประมาณที่สมเหตุสมผลและระบุใน message ว่าเป็นการประมาณ
+`.trim();
+}
 
 function buildSystemInstruction(context: CoachContext): string {
   const profile = context.userProfile;
@@ -170,73 +282,156 @@ function buildContents(history: HistoryItem[], userMessage: string) {
   return contents;
 }
 
+function parseCoachResponse(text: string, fallbackMessage: string): CoachResponse {
+  const raw = (text || "").trim();
+  if (raw) {
+    try {
+      const cleaned = raw
+        .replace(/^```(?:json)?\s*/i, "")
+        .replace(/\s*```$/i, "")
+        .trim();
+      const parsed = JSON.parse(cleaned) as Partial<CoachResponse>;
+
+      if (
+        typeof parsed.message === "string" &&
+        typeof parsed.type === "string"
+      ) {
+        return {
+          message: parsed.message.trim() || fallbackMessage,
+          type: parsed.type as CoachResponse["type"],
+          data: parsed.data,
+          actions: parsed.actions,
+        };
+      }
+    } catch (err) {
+      console.error("[Gemini AI] Structured response parse failed:", err);
+    }
+  }
+
+  return {
+    message: raw || fallbackMessage,
+    type: "chat",
+  };
+}
+
+function buildFallbackCoachResponse(userMessage: string, context: CoachContext): CoachResponse {
+  const userName = context.userProfile?.name ? `คุณ ${context.userProfile.name}` : "";
+  const lower = userMessage.toLowerCase();
+
+  if (lower.includes("เหนื่อย") || lower.includes("ล้า") || lower.includes("เจ็บ") || lower.includes("พัก")) {
+    return {
+      message: `สวัสดีครับ ${userName} วันนี้หากรู้สึกเมื่อยล้า แนะนำทำ Active Recovery หรือยืดเหยียดเบาๆ 20 นาที แล้วดื่มน้ำพักผ่อนให้เต็มที่นะครับ โค้ชพร้อมปรับตารางให้เสมอครับ`,
+      type: "recovery",
+      data: { durationMinutes: 20 },
+      actions: [{ id: "adapt-recovery", label: "ปรับโปรแกรมวันนี้", actionType: "cannot_do", style: "primary" }],
+    };
+  }
+
+  if (lower.includes("กิน") || lower.includes("อาหาร") || lower.includes("ข้าว") || lower.includes("เมนู")) {
+    return {
+      message: `แนะนำเน้นโปรตีนคุณภาพดี เช่น อกไก่ ปลา ไข่ หรือเต้าหู้ ควบคู่กับคาร์บเชิงซ้อนอย่างข้าวกล้อง เพื่อเสริมสร้างกล้ามเนื้อและให้พลังงานคงที่ครับ`,
+      type: "nutrition",
+    };
+  }
+
+  return {
+    message: `ขออภัยครับ ตอนนี้โค้ชตอบแบบละเอียดไม่ได้ชั่วคราว ลองส่งข้อความอีกครั้งในอีกสักครู่นะครับ`,
+    type: "chat",
+  };
+}
+
+/**
+ * Phase 1 API: Gemini -> canonical structured FitCoach response.
+ * Tool calling is preserved. Structured JSON is requested only on the final
+ * response round, after any required coach tools have completed.
+ */
+export async function generateCoachResponseStructured(
+  userMessage: string,
+  context: CoachContext = {},
+  history: HistoryItem[] = [],
+  userId?: string,
+): Promise<CoachResponse> {
+  const fallback = buildFallbackCoachResponse(userMessage, context);
+  const ai = getGeminiClient();
+
+  if (!ai) return fallback;
+
+  try {
+    const systemInstruction = buildStructuredSystemInstruction(context);
+    const contents: any[] = buildContents(history.slice(-20), userMessage);
+    const tools = userId ? [{ functionDeclarations: COACH_TOOL_DECLARATIONS as any }] : undefined;
+
+    for (let round = 0; round < 5; round++) {
+      // When there is no userId, there is no tool-calling phase, so request
+      // structured JSON immediately. With a userId, allow up to 4 tool rounds
+      // first and then force the canonical JSON response on the final round.
+      const isFinalRound = !userId || round >= 4;
+      const response = await ai.models.generateContent({
+        model: MODEL,
+        contents,
+        config: {
+          systemInstruction,
+          temperature: 0.7,
+          maxOutputTokens: 4096,
+          tools: isFinalRound ? undefined : tools,
+          ...(isFinalRound
+            ? {
+                responseMimeType: "application/json",
+                responseSchema: COACH_RESPONSE_SCHEMA,
+              }
+            : {}),
+        },
+      });
+
+      const calls = response.functionCalls;
+      if (userId && calls && calls.length > 0) {
+        const modelContent = response.candidates?.[0]?.content;
+        if (modelContent) contents.push(modelContent);
+
+        const parts: any[] = [];
+        for (const call of calls) {
+          let result: Record<string, unknown>;
+          try {
+            result = await executeCoachTool(
+              userId,
+              call.name || "",
+              (call.args || {}) as Record<string, unknown>,
+            );
+          } catch (err) {
+            console.error(`[Coach Tool] ${call.name} error:`, err);
+            result = { ok: false, error: "บันทึกไม่สำเร็จ" };
+          }
+          console.log(`[Coach Tool] ${call.name} ->`, JSON.stringify(result));
+          parts.push({ functionResponse: { name: call.name, response: result } });
+        }
+        contents.push({ role: "user", parts });
+        continue;
+      }
+
+      const text = response.text?.trim();
+      if (text) return parseCoachResponse(text, fallback.message);
+
+      console.error("[Gemini AI] ได้คำตอบว่างจาก Gemini (อาจถูก safety filter หรือ token หมด)");
+      break;
+    }
+  } catch (err) {
+    console.error("[Gemini AI] ❌ เรียก Gemini แบบ structured ไม่สำเร็จ:", err);
+  }
+
+  return fallback;
+}
+
+/**
+ * Backward-compatible Phase 1 wrapper.
+ * Existing LINE/Web callers can keep expecting a string until Phase 2 adds
+ * dedicated renderers. New code should consume generateCoachResponseStructured().
+ */
 export async function generateCoachResponse(
   userMessage: string,
   context: CoachContext = {},
   history: HistoryItem[] = [],
-  userId?: string // ใส่เมื่อต้องการให้โค้ชบันทึก/ปรับแผนได้ (LINE); ไม่ใส่ = ตอบอย่างเดียว
+  userId?: string,
 ): Promise<string> {
-  const profile = context.userProfile;
-
-  const ai = getGeminiClient();
-  if (ai) {
-    try {
-      const systemInstruction = buildSystemInstruction(context);
-      const contents: any[] = buildContents(history.slice(-20), userMessage);
-      const tools = userId ? [{ functionDeclarations: COACH_TOOL_DECLARATIONS as any }] : undefined;
-
-      for (let round = 0; round < 5; round++) {
-        const response = await ai.models.generateContent({
-          model: MODEL,
-          contents,
-          config: {
-            systemInstruction,
-            temperature: 0.7,
-            maxOutputTokens: 4096,
-            // รอบสุดท้ายปิดเครื่องมือ เพื่อบังคับให้ตอบเป็นข้อความ
-            tools: round < 4 ? tools : undefined,
-          },
-        });
-
-        const calls = response.functionCalls;
-        if (userId && calls && calls.length > 0) {
-          const modelContent = response.candidates?.[0]?.content;
-          if (modelContent) contents.push(modelContent);
-
-          const parts: any[] = [];
-          for (const call of calls) {
-            let result: Record<string, unknown>;
-            try {
-              result = await executeCoachTool(userId, call.name || "", (call.args || {}) as Record<string, unknown>);
-            } catch (err) {
-              console.error(`[Coach Tool] ${call.name} error:`, err);
-              result = { ok: false, error: "บันทึกไม่สำเร็จ" };
-            }
-            console.log(`[Coach Tool] ${call.name} ->`, JSON.stringify(result));
-            parts.push({ functionResponse: { name: call.name, response: result } });
-          }
-          contents.push({ role: "user", parts });
-          continue;
-        }
-
-        const text = response.text?.trim();
-        if (text) return text;
-        console.error("[Gemini AI] ได้คำตอบว่างจาก Gemini (อาจถูก safety filter หรือ token หมด)");
-        break;
-      }
-    } catch (err) {
-      console.error("[Gemini AI] ❌ เรียก Gemini ไม่สำเร็จ:", err);
-    }
-  }
-
-  // Fallback (ใช้เมื่อไม่มี API key หรือ Gemini error)
-  const userName = profile?.name ? `คุณ ${profile.name}` : "";
-  const lower = userMessage.toLowerCase();
-  if (lower.includes("เหนื่อย") || lower.includes("ล้า") || lower.includes("เจ็บ") || lower.includes("พัก")) {
-    return `สวัสดีครับ ${userName} วันนี้หากรู้สึกเมื่อยล้า แนะนำทำ Active Recovery หรือยืดเหยียดเบาๆ 20 นาที แล้วดื่มน้ำพักผ่อนให้เต็มที่นะครับ โค้ชพร้อมปรับตารางให้เสมอครับ`;
-  }
-  if (lower.includes("กิน") || lower.includes("อาหาร") || lower.includes("ข้าว") || lower.includes("เมนู")) {
-    return `แนะนำเน้นโปรตีนคุณภาพดี เช่น อกไก่ ปลา ไข่ หรือเต้าหู้ ควบคู่กับคาร์บเชิงซ้อนอย่างข้าวกล้อง เพื่อเสริมสร้างกล้ามเนื้อและให้พลังงานคงที่ครับ`;
-  }
-  return `ขออภัยครับ ตอนนี้โค้ชตอบแบบละเอียดไม่ได้ชั่วคราว ลองส่งข้อความอีกครั้งในอีกสักครู่นะครับ`;
+  const response = await generateCoachResponseStructured(userMessage, context, history, userId);
+  return response.message;
 }
