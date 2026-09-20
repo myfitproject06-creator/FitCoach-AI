@@ -6,7 +6,14 @@ import { createServer as createViteServer } from "vite";
 import { authRouter, getMeHandler, requireAuth, type AuthenticatedRequest } from "./auth-line";
 import { googleFitRouter } from "./google-fit";
 import { lineWebhookHandler } from "./line-webhook";
-import { getUserData, saveUserData } from "./db";
+import {
+  getUserData,
+  saveUserData,
+  getCoachIntake,
+  getDailyNutritionSummary,
+  getDailyFoodLog,
+  getPendingMeal,
+} from "./db";
 import { generateCoachResponseStructured, type HistoryItem } from "./coach-ai";
 import { registerLineRichMenuRoutes } from "./line-richmenu";
 import { startReminderEngine, sendMorningBriefing, sendNightRecap } from "./reminder-engine";
@@ -264,6 +271,52 @@ async function startServer() {
   // context ที่ frontend ส่งมาแทน
   // ----------------------------------------------------
 
+  // ----------------------------------------------------
+  // Coach Intake API
+  // ----------------------------------------------------
+  app.get("/api/coach-intake", async (req: any, res) => {
+    try {
+      const rawSession = req.signedCookies?.fitcoach_session;
+      let userId = "guest_web_user";
+      if (rawSession) {
+        try {
+          const sessionUser = JSON.parse(rawSession);
+          if (sessionUser?.userId) userId = sessionUser.userId;
+        } catch {
+          // ignore
+        }
+      }
+      if (req.query.userId) userId = String(req.query.userId);
+      const intake = await getCoachIntake(userId);
+      return res.json({ success: true, intake });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err?.message || "Error" });
+    }
+  });
+
+  // ----------------------------------------------------
+  // Nutrition Daily Logs & Summary API
+  // ----------------------------------------------------
+  app.get("/api/nutrition/daily", async (req: any, res) => {
+    try {
+      const rawSession = req.signedCookies?.fitcoach_session;
+      let userId = "guest_web_user";
+      if (rawSession) {
+        try {
+          const sessionUser = JSON.parse(rawSession);
+          if (sessionUser?.userId) userId = sessionUser.userId;
+        } catch {}
+      }
+      if (req.query.userId) userId = String(req.query.userId);
+      const date = req.query.date ? String(req.query.date) : undefined;
+      const summary = await getDailyNutritionSummary(userId, date);
+      const log = await getDailyFoodLog(userId, date);
+      return res.json({ success: true, summary, log });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err?.message || "Error" });
+    }
+  });
+
   app.post(
     "/api/ai/coach-chat",
     async (req: AuthenticatedRequest, res) => {
@@ -276,6 +329,7 @@ async function startServer() {
           nutritionData,
           recoveryData,
           history,
+          image,
         } = req.body ?? {};
 
         if (!message || typeof message !== "string") {
@@ -309,16 +363,17 @@ async function startServer() {
         }
 
         const authenticatedUserId = req.user?.userId;
+        const targetUserId =
+          authenticatedUserId ||
+          (req.body.userId ? String(req.body.userId) : "guest_web_user");
 
         // ------------------------------------------------
-        // Authenticated user:
+        // Authenticated user หรือ Web user:
         // Firebase เป็น source of truth
         // Guest:
-        // ใช้ context จาก frontend
+        // ใช้ context จาก frontend ควบคู่กับ db
         // ------------------------------------------------
-        const userData = authenticatedUserId
-          ? await getUserData(authenticatedUserId)
-          : null;
+        const userData = await getUserData(targetUserId);
 
         const effectiveProfile =
           userData?.profile || userProfile;
@@ -390,10 +445,12 @@ async function startServer() {
 
         // ------------------------------------------------
         // Gemini + Coach Tools
-        // ถ้ามี authenticatedUserId:
-        // save_plan / upsert_plan_days / log_workout /
-        // update_profile_info จะเขียนลง Firebase ได้จริง
+        // บันทึก update_coach_intake / save_plan / update_profile_info / log_meal
         // ------------------------------------------------
+        const nutritionSummary = await getDailyNutritionSummary(targetUserId);
+        const pendingMeal = await getPendingMeal(targetUserId);
+        const imagePart = image?.data && image?.mimeType ? { inlineData: { data: image.data, mimeType: image.mimeType } } : undefined;
+
         const coachResponse =
           await generateCoachResponseStructured(
             message,
@@ -404,55 +461,58 @@ async function startServer() {
               nutritionData: effectiveNutrition,
               recoveryData: effectiveRecovery,
               coachPlan: userData?.coachPlan,
+              pastPlans: userData?.coachPlans,
               workoutLogs: userData?.workoutLogs,
               coachProfile: userData?.coachProfile,
+              coachIntake: userData?.coachIntake,
+              nutritionSummary,
+              pendingMeal,
             },
             combinedHistory,
-            authenticatedUserId
+            targetUserId,
+            imagePart
           );
 
         // ------------------------------------------------
-        // เก็บบทสนทนาลง Firebase
+        // เก็บบทสนทนาลง Database
         // ------------------------------------------------
-        if (authenticatedUserId) {
-          const currentMessages = Array.isArray(userData?.messages)
-            ? userData.messages
-            : [];
+        const currentMessages = Array.isArray(userData?.messages)
+          ? userData.messages
+          : [];
 
-          const now = new Date().toISOString();
+        const now = new Date().toISOString();
 
-          const userMessageRecord = {
-            id: `user-${Date.now()}`,
-            sender: "user" as const,
-            text: message,
-            timestamp: now,
-          };
+        const userMessageRecord = {
+          id: `user-${Date.now()}`,
+          sender: "user" as const,
+          text: message,
+          timestamp: now,
+        };
 
-          const botMessageRecord = {
-            id: `bot-${Date.now()}`,
-            sender: "bot" as const,
-            text: coachResponse.message,
-            timestamp: now,
-            coachResponse,
-          };
+        const botMessageRecord = {
+          id: `bot-${Date.now()}`,
+          sender: "bot" as const,
+          text: coachResponse.message,
+          timestamp: now,
+          coachResponse,
+        };
 
-          const nextMessages = [
-            ...currentMessages,
-            userMessageRecord,
-            botMessageRecord,
-          ].slice(-100);
+        const nextMessages = [
+          ...currentMessages,
+          userMessageRecord,
+          botMessageRecord,
+        ].slice(-100);
 
-          await saveUserData(authenticatedUserId, {
-            messages: nextMessages,
-          });
-        }
+        await saveUserData(targetUserId, {
+          messages: nextMessages,
+        });
 
         return res.json({
           reply: coachResponse.message,
           coachResponse,
           timestamp: new Date().toISOString(),
           dataSource: authenticatedUserId ? "firebase" : "client",
-          realCoachData: Boolean(authenticatedUserId),
+          realCoachData: Boolean(authenticatedUserId || targetUserId),
           userIdConnected: Boolean(authenticatedUserId),
         });
       } catch (err) {

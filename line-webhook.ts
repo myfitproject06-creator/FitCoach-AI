@@ -1,7 +1,15 @@
 // line-webhook.ts - Phase 5: LINE Coach Actions + Success + Rich Menu
 import { Request, Response } from "express";
 import crypto from "crypto";
-import { getUserData, saveUserData } from "./db";
+import {
+  getUserData,
+  saveUserData,
+  getPendingMeal,
+  savePendingMeal,
+  addFoodLogItem,
+  getDailyNutritionSummary,
+  checkAndIncrementDailyPhotoCount,
+} from "./db";
 import type { ChatMessage, CoachActionType, CoachResponse } from "./src/types";
 import { generateCoachResponseStructured } from "./coach-ai";
 import { executeCoachTool, bangkokToday } from "./coach-plan";
@@ -61,6 +69,117 @@ async function replyLineMessages(replyToken: string, messages: LineMessagePayloa
     console.error("[LINE Webhook] Error calling LINE Reply API:", err);
     return false;
   }
+}
+
+async function fetchLineImageBase64(
+  messageId: string,
+  channelAccessToken: string
+): Promise<{ base64: string; mimeType: string } | null> {
+  if (!channelAccessToken) {
+    console.warn("[LINE Webhook] Missing LINE_CHANNEL_ACCESS_TOKEN for fetching image");
+    return null;
+  }
+  try {
+    const res = await fetch(`https://api-data.line.me/v2/bot/message/${messageId}/content`, {
+      headers: {
+        Authorization: `Bearer ${channelAccessToken}`,
+      },
+    });
+    if (!res.ok) {
+      console.error(`[LINE Webhook] Failed to fetch message image ${messageId}: ${res.status} ${res.statusText}`);
+      return null;
+    }
+    const contentType = res.headers.get("content-type") || "image/jpeg";
+    const arrayBuffer = await res.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    return {
+      base64: buffer.toString("base64"),
+      mimeType: contentType,
+    };
+  } catch (err) {
+    console.error(`[LINE Webhook] Error downloading image ${messageId}:`, err);
+    return null;
+  }
+}
+
+async function handleConfirmMeal(
+  event: LineEvent,
+  userId: string,
+  channelAccessToken: string
+): Promise<void> {
+  if (!event.replyToken) return;
+  const pending = await getPendingMeal(userId);
+  if (!pending) {
+    await replyLineMessages(
+      event.replyToken,
+      [
+        {
+          type: "text",
+          text: "ไม่พบรายการอาหารที่รอยืนยันครับ คุณสามารถพิมพ์บอกชื่ออาหารหรือส่งรูปให้โค้ชประเมินใหม่ได้เลยครับ 🍽️",
+        },
+      ],
+      channelAccessToken
+    );
+    return;
+  }
+
+  const { summary } = await addFoodLogItem(userId, pending);
+  await savePendingMeal(userId, null);
+
+  let replyText = `✅ บันทึก "${pending.menu}" เรียบร้อยแล้วครับ!\n`;
+  replyText += `ประมาณ ${pending.calories} kcal (โปรตีน ~${pending.protein}g, คาร์บ ~${pending.carbs}g, ไขมัน ~${pending.fat}g)\n\n`;
+
+  if (summary.hasActivePlan && summary.target) {
+    replyText += `📊 สะสมวันนี้: ประมาณ ${summary.todayTotal.calories} / ${summary.target.calories} kcal\n`;
+    if (summary.isOver) {
+      replyText += `⚠️ เกินเป้าหมายวันนี้ไปประมาณ ${summary.overCalories} kcal ไม่ต้องกังวลนะครับ มื้อถัดไปเน้นผักและโปรตีนไขมันต่ำ แล้วขยับร่างกายเพิ่มอีกนิด สู้ต่อได้ครับ! 💪`;
+    } else {
+      replyText += `🎯 ยังเหลือโควต้าอีกประมาณ ${summary.remainingCalories} kcal (${summary.remainingPercent}% ของเป้าหมาย) ยอดเยี่ยมมากครับ! 👏`;
+    }
+  } else {
+    replyText += `📊 สะสมวันนี้: ประมาณ ${summary.todayTotal.calories} kcal (โปรตีน ~${summary.todayTotal.protein}g)\nหากต้องการตั้งเป้าหมายแคลอรี่รายวัน ให้โค้ชช่วยสร้างโปรแกรมได้เลยครับ!`;
+  }
+
+  const coachResponse: CoachResponse = {
+    message: replyText,
+    type: "meal_recorded",
+    data: {
+      menu: pending.menu,
+      portion: pending.portion,
+      calories: pending.calories,
+      proteinGrams: pending.protein,
+      carbsGrams: pending.carbs,
+      fatGrams: pending.fat,
+      confidenceLevel: pending.confidence,
+      todayTotalCalories: summary.todayTotal.calories,
+      targetCalories: summary.target?.calories,
+      remainingCalories: summary.remainingCalories,
+      isOverTarget: summary.isOver,
+    },
+  };
+
+  const userData = await getUserData(userId);
+  const previous: ChatMessage[] = userData?.messages || [];
+  const now = Date.now();
+  const updatedMessages: ChatMessage[] = [
+    ...previous,
+    {
+      id: `u-${now}`,
+      sender: "user" as const,
+      text: `ยืนยันบันทึกมื้อ ${pending.menu}`,
+      timestamp: new Date(now).toISOString(),
+    },
+    {
+      id: `c-${now}`,
+      sender: "coach" as const,
+      text: replyText,
+      timestamp: new Date().toISOString(),
+      coachResponse,
+    },
+  ].slice(-40);
+
+  await saveUserData(userId, { messages: updatedMessages });
+  await replyLineMessages(event.replyToken, buildLineReplyMessages(coachResponse), channelAccessToken);
 }
 
 function parseFitCoachPostback(data: string):
@@ -273,7 +392,17 @@ async function handlePostbackAction(event: LineEvent, userId: string, channelAcc
     return;
   }
 
+  if (parsed.kind === "coach" && (parsed.id === "confirm_meal" || parsed.actionType === "confirm")) {
+    const pending = await getPendingMeal(userId);
+    if (pending) {
+      await handleConfirmMeal(event, userId, channelAccessToken);
+      return;
+    }
+  }
+
   const userData = await getUserData(userId);
+  const nutritionSummary = await getDailyNutritionSummary(userId);
+  const pendingMeal = await getPendingMeal(userId);
   const previous: ChatMessage[] = userData?.messages || [];
   let response: CoachResponse;
 
@@ -291,8 +420,12 @@ async function handlePostbackAction(event: LineEvent, userId: string, channelAcc
         nutritionData: userData?.nutrition,
         recoveryData: userData?.recovery,
         coachPlan: userData?.coachPlan,
+        pastPlans: userData?.coachPlans,
         workoutLogs: userData?.workoutLogs,
         coachProfile: userData?.coachProfile,
+        coachIntake: userData?.coachIntake,
+        nutritionSummary,
+        pendingMeal,
       },
       previous.slice(-20).map((m) => ({ sender: m.sender, text: m.text })),
       userId,
@@ -314,6 +447,106 @@ async function handlePostbackAction(event: LineEvent, userId: string, channelAcc
     ...previous,
     { id: `u-${now}`, sender: "user" as const, text: displayText, timestamp: new Date(now).toISOString() },
     { id: `c-${now}`, sender: "coach" as const, text: response.message, timestamp: new Date().toISOString(), coachResponse: response },
+  ].slice(-40);
+
+  await saveUserData(userId, { messages: updatedMessages });
+  await replyLineMessages(event.replyToken, buildLineReplyMessages(response), channelAccessToken);
+}
+
+async function handleImageMessage(
+  event: LineEvent,
+  userId: string,
+  channelAccessToken: string
+): Promise<void> {
+  if (!event.replyToken || !event.message?.id) return;
+  const messageId = event.message.id;
+
+  const photoCheck = await checkAndIncrementDailyPhotoCount(userId, 15);
+  if (!photoCheck.allowed) {
+    await replyLineMessages(
+      event.replyToken,
+      [
+        {
+          type: "text",
+          text: "ขออภัยครับ วันนี้คุณส่งรูปวิเคราะห์โภชนาการครบโควต้า 15 รูปแล้วครับ 🙏\nระบบจะรีเซ็ตโควต้าใหม่พรุ่งนี้เวลา 00:00 น.\n\nแต่คุณยังสามารถพิมพ์บอกชื่ออาหารและปริมาณมาให้โค้ชประเมินได้ไม่จำกัดเลยครับ! 💬",
+        },
+      ],
+      channelAccessToken
+    );
+    return;
+  }
+
+  const img = await fetchLineImageBase64(messageId, channelAccessToken);
+  if (!img) {
+    await replyLineMessages(
+      event.replyToken,
+      [
+        {
+          type: "text",
+          text: "ขออภัยครับ ไม่สามารถดาวน์โหลดรูปภาพจาก LINE ได้ในขณะนี้ กรุณาลองส่งใหม่อีกครั้ง หรือพิมพ์ชื่ออาหารแทนได้ครับ",
+        },
+      ],
+      channelAccessToken
+    );
+    return;
+  }
+
+  const userData = await getUserData(userId);
+  const nutritionSummary = await getDailyNutritionSummary(userId);
+  const pendingMeal = await getPendingMeal(userId);
+  const previous: ChatMessage[] = userData?.messages || [];
+
+  let response: CoachResponse;
+  try {
+    response = await generateCoachResponseStructured(
+      "ช่วยประเมินสารอาหารจากรูปภาพนี้ให้หน่อยครับ (บอกชื่อเมนูโดยประมาณ ปริมาณ และแมโคร 4 ตัวเป็นเลขกลมๆ พร้อมเทียบกับโควตาวันนี้ และถามยืนยันก่อนบันทึก)",
+      {
+        userProfile: userData?.profile,
+        workoutPlan: userData?.workout,
+        fitnessStatus: userData?.status,
+        nutritionData: userData?.nutrition,
+        recoveryData: userData?.recovery,
+        coachPlan: userData?.coachPlan,
+        pastPlans: userData?.coachPlans,
+        workoutLogs: userData?.workoutLogs,
+        coachProfile: userData?.coachProfile,
+        coachIntake: userData?.coachIntake,
+        nutritionSummary,
+        pendingMeal,
+      },
+      previous.slice(-20).map((m) => ({ sender: m.sender, text: m.text })),
+      userId,
+      {
+        inlineData: {
+          data: img.base64,
+          mimeType: img.mimeType,
+        },
+      }
+    );
+  } catch (err) {
+    console.error("[LINE Webhook] Image analysis error:", err);
+    response = {
+      message: "ขออภัยครับ เกิดข้อผิดพลาดในการประเมินรูปภาพ กรุณาลองส่งใหม่อีกครั้ง หรือพิมพ์ชื่อเมนูอาหารบอกโค้ชได้เลยครับ",
+      type: "chat",
+    };
+  }
+
+  const now = Date.now();
+  const updatedMessages: ChatMessage[] = [
+    ...previous,
+    {
+      id: `u-${now}`,
+      sender: "user" as const,
+      text: "[ส่งรูปอาหาร]",
+      timestamp: new Date(now).toISOString(),
+    },
+    {
+      id: `c-${now}`,
+      sender: "coach" as const,
+      text: response.message,
+      timestamp: new Date().toISOString(),
+      coachResponse: response,
+    },
   ].slice(-40);
 
   await saveUserData(userId, { messages: updatedMessages });
@@ -349,6 +582,11 @@ export async function lineWebhookHandler(req: Request, res: Response) {
         continue;
       }
 
+      if (event.type === "message" && event.message?.type === "image" && event.replyToken) {
+        await handleImageMessage(event, userId, channelAccessToken);
+        continue;
+      }
+
       if (event.type !== "message" || event.message?.type !== "text" || !event.replyToken) continue;
 
       const userText = event.message.text || "";
@@ -367,6 +605,8 @@ export async function lineWebhookHandler(req: Request, res: Response) {
         continue;
       }
 
+      const nutritionSummary = await getDailyNutritionSummary(userId);
+      const pendingMeal = await getPendingMeal(userId);
       const previous: ChatMessage[] = userData?.messages || [];
       const response = await generateCoachResponseStructured(
         userText,
@@ -377,8 +617,12 @@ export async function lineWebhookHandler(req: Request, res: Response) {
           nutritionData: userData?.nutrition,
           recoveryData: userData?.recovery,
           coachPlan: userData?.coachPlan,
+          pastPlans: userData?.coachPlans,
           workoutLogs: userData?.workoutLogs,
           coachProfile: userData?.coachProfile,
+          coachIntake: userData?.coachIntake,
+          nutritionSummary,
+          pendingMeal,
         },
         previous.slice(-20).map((m) => ({ sender: m.sender, text: m.text })),
         userId,

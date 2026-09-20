@@ -194,22 +194,70 @@ function buildWorkoutBubble(response: CoachResponse): LineFlexBubble {
 
 function buildDetailBubble(response: CoachResponse): LineFlexBubble {
   const d = response.data || {};
+  const isNutrition = response.type === "nutrition" || response.type === "meal_recorded" || d.calories != null;
   const meta = typeLabel(response);
+
   const stats: Record<string, unknown>[] = [];
-  if (d.calories != null) stats.push(pill(`${d.calories} kcal`, COLORS.amberSoft, COLORS.amber));
-  if (d.proteinGrams != null) stats.push(pill(`${d.proteinGrams} g โปรตีน`, COLORS.redSoft, COLORS.red));
+  if (d.calories != null) stats.push(pill(`~${Math.round(d.calories)} kcal`, COLORS.amberSoft, COLORS.amber));
+  if (d.proteinGrams != null) stats.push(pill(`P: ~${Math.round(d.proteinGrams)}g`, COLORS.redSoft, COLORS.red));
+  if (d.carbsGrams != null) stats.push(pill(`C: ~${Math.round(d.carbsGrams)}g`, COLORS.blueSoft, COLORS.blue));
+  if (d.fatGrams != null) stats.push(pill(`F: ~${Math.round(d.fatGrams)}g`, COLORS.amberSoft, COLORS.amber));
   if (d.sleepHours != null) stats.push(pill(`${d.sleepHours} ชม.`, COLORS.purpleSoft, COLORS.purple));
   if (d.recoveryScore != null) stats.push(pill(`Recovery ${d.recoveryScore}%`, COLORS.greenSoft, COLORS.green));
+
+  const titleText = d.menu
+    ? `${d.menu}${d.portion ? ` (${d.portion})` : ""}`
+    : (d.titleTh || d.title || (isNutrition ? "ประมาณการสารอาหาร" : "ข้อมูลจากโค้ช"));
+
   const bodyContents: Record<string, unknown>[] = [
     text(meta.label, "xs", "bold", meta.accent),
-    text(d.titleTh || d.title || "ข้อมูลจากโค้ช", "lg", "bold"),
+    text(titleText, "lg", "bold"),
   ];
+
   if (d.summary) bodyContents.push(text(d.summary, "sm", "regular", COLORS.muted));
-  if (stats.length) bodyContents.push({ type: "box", layout: "horizontal", spacing: "sm", contents: stats.slice(0, 4) });
+  if (stats.length) {
+    bodyContents.push({ type: "box", layout: "horizontal", spacing: "sm", contents: stats.slice(0, 4) });
+  }
+
+  if (d.confidenceLevel) {
+    const confLabel = d.confidenceLevel === "high" ? "ความมั่นใจ: สูง" : d.confidenceLevel === "low" ? "ความมั่นใจ: ประเมินคร่าวๆ" : "ความมั่นใจ: ปานกลาง";
+    bodyContents.push(text(`ℹ️ ${confLabel}`, "xs", "regular", COLORS.muted));
+  }
+
+  // วันนี้สะสม / โควต้า
+  if (d.todayTotalCalories != null || d.targetCalories != null || d.remainingCalories != null) {
+    bodyContents.push(separator());
+    const quotaLines: Record<string, unknown>[] = [
+      text("📊 ภาพรวมโภชนาการวันนี้", "xs", "bold", COLORS.ink),
+    ];
+    if (d.todayTotalCalories != null && d.targetCalories != null) {
+      quotaLines.push(text(`• กินแล้ว: ~${Math.round(d.todayTotalCalories)} / ${Math.round(d.targetCalories)} kcal`, "xs", "regular", COLORS.muted));
+    } else if (d.todayTotalCalories != null) {
+      quotaLines.push(text(`• กินแล้วสะสมวันนี้: ~${Math.round(d.todayTotalCalories)} kcal`, "xs", "regular", COLORS.muted));
+    }
+    if (d.remainingCalories != null) {
+      if (d.remainingCalories >= 0) {
+        quotaLines.push(text(`• เหลือโควต้าอีก: ~${Math.round(d.remainingCalories)} kcal`, "xs", "bold", COLORS.green));
+      } else {
+        quotaLines.push(text(`• เกินเป้าหมายวันนี้: +${Math.round(Math.abs(d.remainingCalories))} kcal`, "xs", "bold", COLORS.amber));
+      }
+    }
+    bodyContents.push({
+      type: "box",
+      layout: "vertical",
+      backgroundColor: COLORS.soft,
+      cornerRadius: "md",
+      paddingAll: "md",
+      spacing: "xs",
+      contents: quotaLines,
+    });
+  }
+
   if (d.reason) bodyContents.push(text(`เหตุผล: ${d.reason}`, "xs", "regular", COLORS.muted));
   if (d.reminderDate || d.reminderTime) {
     bodyContents.push({ type: "box", layout: "vertical", backgroundColor: COLORS.amberSoft, cornerRadius: "md", paddingAll: "md", margin: "sm", contents: [text(`🔔 ${d.reminderDate || "วันนี้"} ${d.reminderTime || ""}`.trim(), "sm", "bold", COLORS.amber)] });
   }
+
   return {
     type: "bubble",
     size: "mega",

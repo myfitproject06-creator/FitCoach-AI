@@ -274,6 +274,18 @@ export interface CoachResponseData {
   reminderTime?: string;
   calories?: number;
   proteinGrams?: number;
+  carbsGrams?: number;
+  fatGrams?: number;
+  menu?: string;
+  portion?: string;
+  mealId?: string;
+  mealType?: "breakfast" | "lunch" | "dinner" | "snack";
+  source?: "text" | "photo";
+  confidenceLevel?: "high" | "medium" | "low";
+  remainingCalories?: number;
+  todayTotalCalories?: number;
+  targetCalories?: number;
+  isOverTarget?: boolean;
   sleepHours?: number;
   recoveryScore?: number;
   confidence?: number;
@@ -387,7 +399,7 @@ export interface GoogleHealthSyncState {
 
 
 // ===== Coach Plan (โปรแกรมที่โค้ช AI สร้าง/ปรับ และใช้ทำเช็คลิสต์-ปฏิทิน) =====
-export type PlanDayStatus = "planned" | "done" | "skipped" | "moved";
+export type PlanDayStatus = "pending" | "done" | "missed" | "rest" | "planned" | "skipped" | "moved";
 
 export interface PlanExercise {
   name: string;
@@ -399,14 +411,23 @@ export interface PlanExercise {
   note?: string;
 }
 
+export interface PlanDayNutritionTarget {
+  calories: number; // kcal
+  protein: number;  // g
+  carbs: number;    // g
+  fat: number;      // g
+}
+
 export interface PlanDay {
   date: string; // YYYY-MM-DD (เวลาไทย)
+  type?: "workout" | "rest";
   title: string;
   focus?: string;
   isRestDay?: boolean;
   durationMinutes?: number;
   exercises: PlanExercise[];
-  status: PlanDayStatus;
+  nutritionTarget?: PlanDayNutritionTarget;
+  status: PlanDayStatus; // "pending" (วันซ้อม) หรือ "rest" (วันพัก) หรือ "done" / "missed"
   coachNote?: string;
   completedAt?: string;
 }
@@ -417,14 +438,37 @@ export interface PlanPhase {
   focus: string;
 }
 
+export type CoachPlanStatus = "active" | "completed" | "replaced";
+
+export interface CoachPlanNutritionTarget {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  restDayCalories?: number;
+  restDayProtein?: number;
+  restDayCarbs?: number;
+  restDayFat?: number;
+  restDay?: {
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+  };
+}
+
 export interface CoachPlan {
   id: string;
   title: string;
   goal: string;
   startDate: string;
   endDate: string;
+  status: CoachPlanStatus; // "active" | "completed" | "replaced"
+  durationWeeks?: number;
+  daysPerWeek?: number;
   phases: PlanPhase[];
-  days: PlanDay[]; // ลงรายละเอียดเฉพาะช่วงที่ใกล้ถึง (rolling)
+  dailyNutritionTarget?: CoachPlanNutritionTarget;
+  days: PlanDay[]; // ตารางรายวันตลอดโปรแกรม
   createdAt: string;
   updatedAt: string;
 }
@@ -447,3 +491,127 @@ export interface CoachProfileExtra {
   preferredWorkoutTime?: string;
   notes?: string;
 }
+
+// ===== Coach Intake System (ระบบ Intake ก่อนสร้างโปรแกรม) =====
+export interface CoachIntakeAnswers {
+  // 1. เป้าหมาย (รายละเอียดที่ผู้ใช้ต้องการ เช่น ลดพุง 1 เดือน, เฟิร์มกระชับ)
+  goalDetails?: string;
+  // 2. อาชีพ / ลักษณะงาน (นั่งโต๊ะ ยืนทั้งวัน ใช้แรง)
+  occupation?: string;
+  // 3. เวลาเลิกงาน (เช่น 17:30, 18:00)
+  workEndTime?: string;
+  // 4. สถานที่ซ้อมหลัก: บ้าน / ยิม / สลับ
+  workoutLocation?: string;
+  // 5. อุปกรณ์ที่มี (ถ้าซ้อมที่บ้านหรือสลับ)
+  equipment?: string[];
+  // 6. เวลาว่างต่อวัน และเวลาที่สะดวกซ้อม (เช้า/เย็น/ดึก)
+  availableTimePerDay?: string;
+  preferredWorkoutTime?: string;
+  // 7. จำนวนวันที่ซ้อมได้ต่อสัปดาห์
+  daysPerWeek?: number;
+  // 8. ระยะเวลาโปรแกรมที่ผู้ใช้ต้องการ (เช่น 1 สัปดาห์, 2 เดือน, 3-4 เดือน หรือโค้ชประเมินให้)
+  programDuration?: string;
+  // 9. ประสบการณ์ซ้อมที่ผ่านมา (มือใหม่ / เคยซ้อม / ซ้อมประจำ)
+  experienceLevel?: string;
+  // 10. อาการบาดเจ็บหรือข้อจำกัดของร่างกายที่ต้องระวัง (ผู้ใช้ข้ามได้)
+  injuriesOrLimitations?: string;
+  // 11. ข้อจำกัดเรื่องอาหาร (แพ้อาหาร ไม่กินอะไร ผู้ใช้ข้ามได้)
+  dietaryRestrictions?: string;
+}
+
+export type IntakeQuestionKey =
+  | "goalDetails"
+  | "occupation"
+  | "workEndTime"
+  | "workoutLocation"
+  | "equipment"
+  | "availableTimePerDay"
+  | "preferredWorkoutTime"
+  | "daysPerWeek"
+  | "programDuration"
+  | "experienceLevel"
+  | "injuriesOrLimitations"
+  | "dietaryRestrictions";
+
+export interface CoachIntake {
+  status: "idle" | "in_progress" | "pending_confirmation" | "completed";
+  intakeComplete: boolean;
+  isUrgentPlan?: boolean;
+  answers: CoachIntakeAnswers;
+  answeredQuestions: string[];
+  pendingQuestions: string[];
+  summaryText?: string;
+  confirmedAt?: string;
+  updatedAt: string;
+}
+
+// ---------- Daily Nutrition & Food Logging ----------
+export interface FoodLogItem {
+  id: string;
+  time: string; // "HH:MM" e.g. "12:30"
+  date: string; // "YYYY-MM-DD"
+  menu: string; // ชื่อเมนู
+  portion?: string; // ปริมาณโดยประมาณ เช่น "1 จาน"
+  calories: number; // kcal ปัดเลขกลมๆ
+  protein: number; // g ปัดเลขกลมๆ
+  carbs: number; // g ปัดเลขกลมๆ
+  fat: number; // g ปัดเลขกลมๆ
+  source: "text" | "photo";
+  confidence: "high" | "medium" | "low";
+  meal: "breakfast" | "lunch" | "dinner" | "snack";
+  note?: string;
+  createdAt: string;
+}
+
+export interface DailyFoodLog {
+  date: string; // "YYYY-MM-DD"
+  items: FoodLogItem[];
+  photoAnalysisCount?: number;
+}
+
+export interface PendingMealLog {
+  id: string;
+  date: string;
+  time: string;
+  menu: string;
+  portion: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  source: "text" | "photo";
+  confidence: "high" | "medium" | "low";
+  meal: "breakfast" | "lunch" | "dinner" | "snack";
+  note?: string;
+  createdAt: string;
+}
+
+export interface DailyNutritionSummary {
+  date: string;
+  hasActivePlan: boolean;
+  todayTotal: {
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+  };
+  target?: {
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+  };
+  remaining?: {
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+  };
+  remainingCalories?: number;
+  remainingPercent?: number;
+  isOver?: boolean;
+  overCalories?: number;
+  items: FoodLogItem[];
+  pendingMeal?: PendingMealLog | null;
+}
+
