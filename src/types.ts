@@ -213,6 +213,77 @@ export interface CoachAccountabilityState {
   lastReminderText?: string;
 }
 
+export type CoachResponseType =
+  | "chat"
+  | "workout"
+  | "workout_reminder"
+  | "nutrition"
+  | "recovery"
+  | "daily_summary"
+  | "adapted_plan"
+  | "new_program"
+  | "meal_recorded"
+  | "penalty_notice"
+  | "profile_update";
+
+export type CoachActionType =
+  | "start_workout"
+  | "snooze"
+  | "cannot_do"
+  | "view_plan"
+  | "log_food"
+  | "apply_program"
+  | "clear_penalty"
+  | "confirm"
+  | "edit";
+
+export interface CoachAction {
+  id: string;
+  label: string;
+  actionType: CoachActionType;
+  style?: "primary" | "secondary" | "danger";
+}
+
+export interface CoachResponseExercise {
+  name: string;
+  nameTh?: string;
+  sets?: number;
+  reps?: string;
+  restSeconds?: number;
+  suggestedWeight?: string;
+  note?: string;
+}
+
+export interface CoachResponseData {
+  title?: string;
+  titleTh?: string;
+  summary?: string;
+  durationMinutes?: number;
+  intensity?: string;
+  focus?: string;
+  tags?: string[];
+  exercises?: CoachResponseExercise[];
+  reason?: string;
+  reminderDate?: string;
+  reminderTime?: string;
+  calories?: number;
+  proteinGrams?: number;
+  sleepHours?: number;
+  recoveryScore?: number;
+  confidence?: number;
+}
+
+/**
+ * Canonical AI output for FitCoach Phase 1.
+ * The AI returns this structure first; UI/LINE renderers consume it later.
+ */
+export interface CoachResponse {
+  message: string;
+  type: CoachResponseType;
+  data?: CoachResponseData;
+  actions?: CoachAction[];
+}
+
 export interface ChatMessage {
   id: string;
   sender: "user" | "bot" | "coach" | "system";
