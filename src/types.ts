@@ -291,6 +291,8 @@ export interface ChatMessage {
   timestamp: string;
   image?: string;
   quickReplies?: string[];
+  /** Structured coach payload used by the Phase 2 UI renderer. */
+  coachResponse?: CoachResponse;
 }
 
 export interface LineMessage {
