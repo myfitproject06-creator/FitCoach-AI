@@ -190,7 +190,9 @@ export function registerLineRichMenuRoutes(app: Express) {
   });
 
   // 2. Setup (Create -> Upload Image -> Set Default)
-  app.post("/api/admin/rich-menu/setup", async (req: Request, res: Response) => {
+  // GET is intentionally supported so the admin can activate the Rich Menu
+  // directly from a browser without Postman/terminal. ADMIN_KEY is still required.
+  const setupRichMenu = async (req: Request, res: Response) => {
     if (!verifyAdminAuth(req)) {
       return res.status(401).json({ error: "Unauthorized: Invalid or missing ADMIN_KEY" });
     }
@@ -285,7 +287,12 @@ export function registerLineRichMenuRoutes(app: Express) {
       console.error("Error setting up Rich Menu:", err);
       return res.status(500).json({ error: err.message });
     }
-  });
+  };
+
+  // Browser-friendly activation: GET /api/admin/rich-menu/setup?key=ADMIN_KEY
+  app.get("/api/admin/rich-menu/setup", setupRichMenu);
+  // Keep POST support for API clients.
+  app.post("/api/admin/rich-menu/setup", setupRichMenu);
 
   // 3. Delete a Rich Menu
   app.delete("/api/admin/rich-menu/:id", async (req: Request, res: Response) => {
