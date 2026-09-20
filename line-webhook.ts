@@ -118,16 +118,22 @@ export async function lineWebhookHandler(req: Request, res: Response) {
               fitnessStatus: userData?.status,
               nutritionData: userData?.nutrition,
               recoveryData: userData?.recovery,
+              coachPlan: userData?.coachPlan,
+              workoutLogs: userData?.workoutLogs,
+              coachProfile: userData?.coachProfile,
             },
-            previous.slice(-20).map((m) => ({ sender: m.sender, text: m.text }))
+            previous.slice(-20).map((m) => ({ sender: m.sender, text: m.text })),
+            userId
           );
+          // LINE จำกัดข้อความละไม่เกิน 5,000 ตัวอักษร
+          if (replyText.length > 4900) replyText = replyText.slice(0, 4900) + "…";
 
           // บันทึกประวัติแชท (เก็บย้อนหลัง 40 ข้อความล่าสุด)
           const now = Date.now();
           const updatedMessages: ChatMessage[] = [
             ...previous,
-            { id: `u-${now}`, sender: "user", text: userText, timestamp: new Date(now).toISOString() },
-            { id: `c-${now}`, sender: "coach", text: replyText, timestamp: new Date().toISOString() },
+            { id: `u-${now}`, sender: "user" as const, text: userText, timestamp: new Date(now).toISOString() },
+            { id: `c-${now}`, sender: "coach" as const, text: replyText, timestamp: new Date().toISOString() },
           ].slice(-40);
           await saveUserData(userId, { messages: updatedMessages });
         }

@@ -1,7 +1,17 @@
 // coach-ai.ts - Gemini API (v2: มีประวัติแชท + พรอมต์โค้ชใหม่)
 import "dotenv/config";
 import { GoogleGenAI } from "@google/genai";
-import type { UserProfile, WorkoutPlan, FitnessStatus, NutritionData, RecoveryData } from "./src/types";
+import type {
+  UserProfile,
+  WorkoutPlan,
+  FitnessStatus,
+  NutritionData,
+  RecoveryData,
+  CoachPlan,
+  WorkoutLog,
+  CoachProfileExtra,
+} from "./src/types";
+import { COACH_TOOL_DECLARATIONS, executeCoachTool, buildPlanContext, bangkokToday } from "./coach-plan";
 
 let aiClient: GoogleGenAI | null = null;
 
@@ -22,6 +32,9 @@ export interface CoachContext {
   fitnessStatus?: FitnessStatus;
   nutritionData?: NutritionData;
   recoveryData?: RecoveryData;
+  coachPlan?: CoachPlan;
+  workoutLogs?: WorkoutLog[];
+  coachProfile?: CoachProfileExtra;
 }
 
 // ประวัติแชท (ตรงกับ ChatMessage ใน types.ts)
@@ -76,6 +89,10 @@ function buildSystemInstruction(context: CoachContext): string {
 - โภชนาการวันนี้: ${nutrition?.currentCalories || 0} / ${nutrition?.targetCalories || 2000} kcal (โปรตีน ${nutrition?.currentProtein || 0} g)
 - ความพร้อม: ${status?.condition ?? 80}% | การฟื้นตัว: ${recovery?.score ?? 85}% | ฝึกต่อเนื่อง: ${status?.momentumDays || 0} วัน
 
+[แผนที่บันทึกไว้ในระบบและผลซ้อม]
+${buildPlanContext(context.coachPlan, context.workoutLogs, context.coachProfile, bangkokToday())}
+- วันที่วันนี้ในรูปแบบ YYYY-MM-DD: ${bangkokToday()} (ใช้คำนวณวันที่ทุกครั้ง ห้ามเดาวันที่)
+
 [หลักการโค้ช]
 1. ซักประวัติก่อนจัดแผน (Intake): เมื่อผู้ใช้ขอโปรแกรมหรือแผนใหม่ (ไม่ว่าจะกี่วัน กี่สัปดาห์ กี่เดือน)
    ให้เริ่มจากดูข้อมูลผู้ใช้ด้านบนและประวัติแชทก่อน แล้วถามเฉพาะสิ่งที่ยังไม่รู้ ห้ามถามซ้ำสิ่งที่มีข้อมูลแล้ว
@@ -105,6 +122,15 @@ function buildSystemInstruction(context: CoachContext): string {
 6. ใช้ประวัติแชทที่ให้มา อย่าถามซ้ำในสิ่งที่ผู้ใช้เคยบอกแล้ว และอ้างอิงแผนที่เคยคุยกันไว้
 7. ความปลอดภัย: ถ้าผู้ใช้เล่าอาการเจ็บผิดปกติ เวียนหัว แน่นหน้าอก หรือหายใจไม่อิ่ม ให้แนะนำหยุดซ้อมและพบแพทย์
    อย่ากดดันให้ฝึกต่อ และอย่าวินิจฉัยโรค
+
+[การใช้เครื่องมือบันทึกข้อมูล]
+- ผู้ใช้บอกข้อมูลใหม่ (อาชีพ เวลาเลิกงาน เวลาที่ซ้อมได้ สถานที่ อุปกรณ์ จำนวนวัน ข้อจำกัดร่างกาย): เรียก update_profile_info ทันที
+- ผู้ใช้ยืนยันสรุปข้อมูลซักประวัติแล้ว: เรียก save_plan (ใส่ phases สำหรับแผนยาว, days ลงรายละเอียดเฉพาะช่วงใกล้ ถ้าแผนสั้นใส่ครบ)
+  วันซ้อมต้องสอดคล้องกับจำนวนวันและเวลาที่ผู้ใช้บอก และวันพักต้องใส่ isRestDay
+- ผู้ใช้ขอปรับแผน/พลาด/ย้ายวัน/เหนื่อย: เรียก upsert_plan_days และ/หรือ set_day_status ให้ตรงกับที่คุยกัน
+- ผู้ใช้รายงานผลซ้อม (ทำเสร็จ น้ำหนักที่ยก ความรู้สึก): เรียก log_workout แล้วให้ feedback เฉพาะตัว และปรับความหนักครั้งถัดไป
+- ต้องเรียกเครื่องมือเสร็จและได้ ok ก่อน จึงบอกผู้ใช้ว่า "บันทึกแล้ว/ปรับแล้ว" ถ้าเครื่องมือส่ง error ให้แก้ข้อมูลแล้วลองใหม่ หรือบอกผู้ใช้ตรงๆ
+- ห้ามอ่านชื่อเครื่องมือหรือรายละเอียดทางเทคนิคให้ผู้ใช้ฟัง
 
 [รูปแบบการตอบ (สำคัญ: ตอบใน LINE)]
 - ห้ามใช้ Markdown (ห้าม ** ห้าม # ห้ามตาราง) LINE ไม่แสดงผล ให้ใช้ข้อความธรรมดา ขึ้นบรรทัดใหม่ และอีโมจิเล็กน้อย
@@ -147,26 +173,57 @@ function buildContents(history: HistoryItem[], userMessage: string) {
 export async function generateCoachResponse(
   userMessage: string,
   context: CoachContext = {},
-  history: HistoryItem[] = []
+  history: HistoryItem[] = [],
+  userId?: string // ใส่เมื่อต้องการให้โค้ชบันทึก/ปรับแผนได้ (LINE); ไม่ใส่ = ตอบอย่างเดียว
 ): Promise<string> {
   const profile = context.userProfile;
 
   const ai = getGeminiClient();
   if (ai) {
     try {
-      const response = await ai.models.generateContent({
-        model: MODEL,
-        contents: buildContents(history.slice(-20), userMessage),
-        config: {
-          systemInstruction: buildSystemInstruction(context),
-          temperature: 0.7,
-          maxOutputTokens: 4096,
-        },
-      });
+      const systemInstruction = buildSystemInstruction(context);
+      const contents: any[] = buildContents(history.slice(-20), userMessage);
+      const tools = userId ? [{ functionDeclarations: COACH_TOOL_DECLARATIONS as any }] : undefined;
 
-      const text = response.text?.trim();
-      if (text) return text;
-      console.error("[Gemini AI] ได้คำตอบว่างจาก Gemini (อาจถูก safety filter หรือ token หมด)");
+      for (let round = 0; round < 5; round++) {
+        const response = await ai.models.generateContent({
+          model: MODEL,
+          contents,
+          config: {
+            systemInstruction,
+            temperature: 0.7,
+            maxOutputTokens: 4096,
+            // รอบสุดท้ายปิดเครื่องมือ เพื่อบังคับให้ตอบเป็นข้อความ
+            tools: round < 4 ? tools : undefined,
+          },
+        });
+
+        const calls = response.functionCalls;
+        if (userId && calls && calls.length > 0) {
+          const modelContent = response.candidates?.[0]?.content;
+          if (modelContent) contents.push(modelContent);
+
+          const parts: any[] = [];
+          for (const call of calls) {
+            let result: Record<string, unknown>;
+            try {
+              result = await executeCoachTool(userId, call.name || "", (call.args || {}) as Record<string, unknown>);
+            } catch (err) {
+              console.error(`[Coach Tool] ${call.name} error:`, err);
+              result = { ok: false, error: "บันทึกไม่สำเร็จ" };
+            }
+            console.log(`[Coach Tool] ${call.name} ->`, JSON.stringify(result));
+            parts.push({ functionResponse: { name: call.name, response: result } });
+          }
+          contents.push({ role: "user", parts });
+          continue;
+        }
+
+        const text = response.text?.trim();
+        if (text) return text;
+        console.error("[Gemini AI] ได้คำตอบว่างจาก Gemini (อาจถูก safety filter หรือ token หมด)");
+        break;
+      }
     } catch (err) {
       console.error("[Gemini AI] ❌ เรียก Gemini ไม่สำเร็จ:", err);
     }
