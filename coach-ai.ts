@@ -190,6 +190,13 @@ function buildSystemInstruction(context: CoachContext): string {
 - อุปกรณ์: ${profile?.equipment?.join(", ") || "ไม่ระบุ"}
 - ข้อจำกัดร่างกาย: ${profile?.limitations?.join(", ") || "ไม่มี"}
 - ฝึก ${profile?.daysPerWeek || 3} วัน/สัปดาห์ ครั้งละประมาณ ${profile?.durationMinutes || 45} นาที เวลาที่สะดวก ${profile?.preferredTime || "-"}
+[สมุดบันทึกความจำของเทรนเนอร์ (TRAINER'S MEMORY & SPECIAL CONSTRAINTS)]
+- อาการบาดเจ็บ/จุดที่ต้องระวัง: ${profile?.hasInjuries ? (profile?.injuryDetails || "มีอาการบาดเจ็บ") : (profile?.injuries && profile.injuries.length > 0 ? profile.injuries.join(", ") : "ไม่มีประวัติการบาดเจ็บ")}
+- ท่าที่ต้องหลีกเลี่ยงเด็ดขาด: ${profile?.avoidExercises && profile.avoidExercises.length > 0 ? profile.avoidExercises.join(", ") : "ไม่มี"}
+- ข้อจำกัดอาหาร / แพ้อาหาร: ${profile?.allergies?.join(", ") || profile?.foodRestrictions?.join(", ") || "ไม่มี"}
+- จุดที่ผู้ใช้ต้องการเน้นพิเศษ: ${profile?.focusAreas?.join(", ") || "ตามเป้าหมายหลัก"}
+- บันทึกส่วนตัวของโค้ช: ${profile?.trainerNotes || "ไม่มีโน้ตเพิ่มเติม"}
+* กฎเหล็กของเทรนเนอร์: คุณต้องจดจำจุดเจ็บและข้อจำกัดข้างต้นเสมอ ห้ามสั่งท่าที่เสี่ยงต่อจุดเจ็บหรือท่าที่ระบุว่าต้องเลี่ยงเด็ดขาด และคอยถามไถ่อาการตรงจุดนี้อย่างสม่ำเสมอแบบเทรนเนอร์มืออาชีพ!
 [แผนและสถานะปัจจุบัน]
 - แผนวันนี้: ${workout?.titleTh || workout?.title || "ยังไม่มีแผน/วันพัก"} (${workout?.durationMinutes || 45} นาที, ความหนัก ${workout?.intensity || "-"})
 - สัปดาห์ที่ ${workout?.currentWeek || "-"} จาก ${workout?.totalWeeks || "-"}

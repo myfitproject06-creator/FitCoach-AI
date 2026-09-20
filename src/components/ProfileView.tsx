@@ -17,6 +17,11 @@ import {
   Send,
   CheckCircle2,
   AlertCircle,
+  Brain,
+  ShieldAlert,
+  Ban,
+  Utensils,
+  Target,
 } from "lucide-react";
 import { UserProfile, FitnessStatus } from "../types";
 
@@ -33,6 +38,7 @@ interface ProfileViewProps {
   onOpenOnboarding: () => void;
   onOpenLine: () => void;
   onOpenGoogleHealth?: () => void;
+  onOpenTrainerMemory?: () => void;
   onLogout?: () => void;
 }
 
@@ -43,6 +49,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   onOpenOnboarding,
   onOpenLine,
   onOpenGoogleHealth,
+  onOpenTrainerMemory,
   onLogout,
 }) => {
   const [sendingBriefing, setSendingBriefing] = useState(false);
@@ -177,6 +184,103 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           <p className="text-xs font-bold text-slate-800 mt-0.5">
             {profile.daysPerWeek > 0 ? `${profile.daysPerWeek} วัน/สัปดาห์` : "-"}
           </p>
+        </div>
+      </div>
+
+      {/* Trainer's Memory & Injury Notebook Card */}
+      <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-200 space-y-3.5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-700 flex items-center justify-center font-bold">
+              <Brain className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                TRAINER'S MEMORY (สมุดบันทึกความจำของโค้ช)
+              </h3>
+              <p className="text-[11px] text-slate-500">
+                สิ่งที่โค้ชจดจำเกี่ยวกับร่างกาย อาการบาดเจ็บ และข้อจำกัดของคุณ
+              </p>
+            </div>
+          </div>
+          <button
+            id="open-trainer-memory-btn"
+            onClick={onOpenTrainerMemory}
+            className="text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-full border border-indigo-200 transition-colors cursor-pointer flex items-center gap-1"
+          >
+            <span>แก้ไขความจำ</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+          {/* Injuries */}
+          <div className="bg-rose-50/50 rounded-2xl p-3 border border-rose-100">
+            <div className="flex items-center gap-1.5 text-rose-700 text-xs font-bold mb-1.5">
+              <ShieldAlert className="w-3.5 h-3.5" />
+              <span>จุดที่ต้องระวัง / เคยบาดเจ็บ</span>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {(profile.injuries && profile.injuries.length > 0) || profile.injuryDetails ? (
+                (profile.injuries && profile.injuries.length > 0 ? profile.injuries : [profile.injuryDetails!]).map((inj: string) => (
+                  <span key={inj} className="text-[10px] bg-white text-rose-700 border border-rose-200 px-2 py-0.5 rounded-md font-medium">
+                    {inj}
+                  </span>
+                ))
+              ) : (
+                <span className="text-[11px] text-slate-400 italic">ไม่มีประวัติการบาดเจ็บ</span>
+              )}
+            </div>
+          </div>
+
+          {/* Avoid exercises */}
+          <div className="bg-amber-50/50 rounded-2xl p-3 border border-amber-100">
+            <div className="flex items-center gap-1.5 text-amber-700 text-xs font-bold mb-1.5">
+              <Ban className="w-3.5 h-3.5" />
+              <span>ท่าที่ต้องเลี่ยง</span>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {profile.avoidExercises && profile.avoidExercises.length > 0 ? (
+                profile.avoidExercises.map((ex: string) => (
+                  <span key={ex} className="text-[10px] bg-white text-amber-700 border border-amber-200 px-2 py-0.5 rounded-md font-medium">
+                    {ex}
+                  </span>
+                ))
+              ) : (
+                <span className="text-[11px] text-slate-400 italic">ไม่มีท่าที่ต้องเลี่ยง</span>
+              )}
+            </div>
+          </div>
+
+          {/* Food restrictions */}
+          <div className="bg-emerald-50/50 rounded-2xl p-3 border border-emerald-100">
+            <div className="flex items-center gap-1.5 text-emerald-700 text-xs font-bold mb-1.5">
+              <Utensils className="w-3.5 h-3.5" />
+              <span>แพ้อาหาร / ข้อจำกัด</span>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {(profile.foodRestrictions && profile.foodRestrictions.length > 0) || (profile.allergies && profile.allergies.length > 0) ? (
+                (profile.foodRestrictions || profile.allergies || []).map((food: string) => (
+                  <span key={food} className="text-[10px] bg-white text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-md font-medium">
+                    {food}
+                  </span>
+                ))
+              ) : (
+                <span className="text-[11px] text-slate-400 italic">ทานได้ทุกประเภท</span>
+              )}
+            </div>
+          </div>
+
+          {/* Focus areas & Notes */}
+          <div className="bg-indigo-50/50 rounded-2xl p-3 border border-indigo-100">
+            <div className="flex items-center gap-1.5 text-indigo-700 text-xs font-bold mb-1.5">
+              <Target className="w-3.5 h-3.5" />
+              <span>จุดเน้น & บันทึกโค้ช</span>
+            </div>
+            <p className="text-[11px] text-slate-600 line-clamp-2">
+              {profile.trainerNotes ? `"${profile.trainerNotes}"` : (profile.focusAreas?.join(", ") || "ตามเป้าหมายหลัก")}
+            </p>
+          </div>
         </div>
       </div>
 

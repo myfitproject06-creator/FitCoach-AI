@@ -15,6 +15,7 @@ import {
   Shield,
   Bell,
   Zap,
+  Brain,
 } from "lucide-react";
 import {
   WorkoutPlan,
@@ -46,6 +47,7 @@ interface HomeViewProps {
   onClearPenalty?: () => void;
   onOpenRichMenuStudio?: () => void;
   onOpenGoogleHealth?: () => void;
+  onOpenTrainerMemory?: () => void;
 }
 
 export const HomeView: React.FC<HomeViewProps> = ({
@@ -67,6 +69,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onClearPenalty,
   onOpenRichMenuStudio,
   onOpenGoogleHealth,
+  onOpenTrainerMemory,
 }) => {
   const todayStr = new Intl.DateTimeFormat("th-TH", {
     weekday: "long",
@@ -352,12 +355,33 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <button
             id="adapt-workout-btn"
             onClick={onOpenAdapt}
-            className="flex items-center gap-1 text-[11px] font-semibold text-emerald-300 hover:text-emerald-200 bg-emerald-950/60 hover:bg-emerald-900/60 px-2.5 py-1 rounded-full border border-emerald-500/30 transition-colors"
+            className="flex items-center gap-1 text-[11px] font-semibold text-emerald-300 hover:text-emerald-200 bg-emerald-950/60 hover:bg-emerald-900/60 px-2.5 py-1 rounded-full border border-emerald-500/30 transition-colors cursor-pointer"
           >
             <SlidersHorizontal className="w-3 h-3" />
             <span>ปรับโปรแกรมด่วน</span>
           </button>
         </div>
+
+        {/* Trainer's Memory Notification in Guidance Box */}
+        {((profile.injuries && profile.injuries.length > 0) || profile.injuryDetails || profile.trainerNotes || (profile.avoidExercises && profile.avoidExercises.length > 0)) && (
+          <div className="mt-2.5 pt-2 border-t border-slate-700/50 flex items-center justify-between text-[11px]">
+            <div className="flex items-center gap-1.5 text-indigo-300 min-w-0">
+              <Brain className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+              <span className="truncate">
+                โค้ชจำจุดระวัง:{" "}
+                {profile.injuries?.join(", ") || profile.injuryDetails || profile.avoidExercises?.join(", ") || profile.trainerNotes}
+              </span>
+            </div>
+            {onOpenTrainerMemory && (
+              <button
+                onClick={onOpenTrainerMemory}
+                className="text-[10px] text-indigo-300 hover:text-white underline whitespace-nowrap ml-2 cursor-pointer font-semibold"
+              >
+                ดูความจำโค้ช
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Daily Progress summary indicator */}

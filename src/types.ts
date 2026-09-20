@@ -51,6 +51,7 @@ export interface WorkoutPlan {
   coachNote?: string;
   rpe?: number;
   feeling?: "easy" | "good" | "challenging" | "hard" | "pain";
+  caloriesBurned?: number;
 }
 
 export interface MealItem {
@@ -175,6 +176,11 @@ export interface UserProfile {
   injuryDetails?: string;
   sleepHoursGoal?: number;
   dailyWaterGoalLiters?: number;
+  injuries?: string[];
+  avoidExercises?: string[];
+  foodRestrictions?: string[];
+  focusAreas?: string[];
+  trainerNotes?: string;
 }
 
 export interface Plan3MonthsData {

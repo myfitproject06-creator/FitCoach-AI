@@ -20,6 +20,7 @@ import { OnboardingModal } from "./components/OnboardingModal";
 import { PlanGenerationModal } from "./components/PlanGenerationModal";
 import { WeeklyReportModal } from "./components/WeeklyReportModal";
 import { Plan3MonthsModal } from "./components/Plan3MonthsModal";
+import { TrainerMemoryModal } from "./components/TrainerMemoryModal";
 
 // Data & Types
 import {
@@ -159,6 +160,7 @@ export default function App() {
   const [isPlanGenOpen, setIsPlanGenOpen] = useState(false);
   const [isWeeklyReportOpen, setIsWeeklyReportOpen] = useState(false);
   const [isPlan3MonthsOpen, setIsPlan3MonthsOpen] = useState(false);
+  const [isTrainerMemoryOpen, setIsTrainerMemoryOpen] = useState(false);
 
   // ตรวจสอบเซสชันและการเข้าสู่ระบบ และดึงข้อมูลผู้ใช้บนเซิร์ฟเวอร์
   useEffect(() => {
@@ -504,6 +506,40 @@ export default function App() {
     setMessages((prev) => [...prev, newPlanMsg]);
   };
 
+  // Trainer's Memory save handler
+  const handleSaveTrainerMemory = (updatedProfile: UserProfile) => {
+    setProfile(updatedProfile);
+
+    // Provide friendly coach confirmation in LINE / Chat
+    const parts: string[] = [];
+    if (updatedProfile.injuries && updatedProfile.injuries.length > 0) {
+      parts.push(`⚠️ จุดที่ต้องระวัง: ${updatedProfile.injuries.join(", ")}`);
+    }
+    if (updatedProfile.avoidExercises && updatedProfile.avoidExercises.length > 0) {
+      parts.push(`🚫 ท่าที่ต้องเลี่ยง: ${updatedProfile.avoidExercises.join(", ")}`);
+    }
+    if (updatedProfile.foodRestrictions && updatedProfile.foodRestrictions.length > 0) {
+      parts.push(`🥗 ข้อจำกัดอาหาร: ${updatedProfile.foodRestrictions.join(", ")}`);
+    }
+    if (updatedProfile.focusAreas && updatedProfile.focusAreas.length > 0) {
+      parts.push(`🎯 จุดที่เน้นเป็นพิเศษ: ${updatedProfile.focusAreas.join(", ")}`);
+    }
+    if (updatedProfile.trainerNotes) {
+      parts.push(`📝 โน้ตความจำ: "${updatedProfile.trainerNotes}"`);
+    }
+
+    const summaryText = parts.length > 0 ? parts.join("\n") : "ไม่มีข้อจำกัดร่างกายเพิ่มเติม (พร้อมลุยเต็มที่)";
+
+    const memoryMsg: ChatMessage = {
+      id: `bot-mem-${Date.now()}`,
+      sender: "bot",
+      text: `🧠 **โค้ชอัปเดตสมุดบันทึกความจำของคุณเรียบร้อยแล้วครับ!**\n\n${summaryText}\n\nโค้ชจดจำข้อมูลนี้ไว้แล้ว และจะไม่แนะนำท่าที่เสี่ยงต่อจุดเจ็บเด็ดขาด พร้อมดูแลคุณอย่างใกล้ชิดครับ! 💪`,
+      timestamp: new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }),
+      quickReplies: ["ดูโปรแกรมวันนี้", "เริ่มซ้อมแบบ Live PT", "ปรึกษาโค้ชเพิ่มเติม"],
+    };
+    setMessages((prev) => [...prev, memoryMsg]);
+  };
+
   // Coach Scenario triggers (e.g. 18:00 reminder, overdue, penalty, meal check-in)
   const handleTriggerCoachScenario = (scenario: "18_00" | "overdue" | "penalty" | "meal_prompt") => {
     if (scenario === "18_00") {
@@ -786,6 +822,7 @@ export default function App() {
             onClearPenalty={handleClearPenalty}
             onOpenRichMenuStudio={() => setIsRichMenuStudioOpen(true)}
             onOpenGoogleHealth={() => setIsGoogleHealthOpen(true)}
+            onOpenTrainerMemory={() => setIsTrainerMemoryOpen(true)}
           />
         )}
 
@@ -816,6 +853,7 @@ export default function App() {
             onOpenOnboarding={() => setIsOnboardingOpen(true)}
             onOpenLine={() => setIsLineBotOpen(true)}
             onOpenGoogleHealth={() => setIsGoogleHealthOpen(true)}
+            onOpenTrainerMemory={() => setIsTrainerMemoryOpen(true)}
           />
         )}
       </main>
@@ -835,6 +873,7 @@ export default function App() {
           setIsWorkoutOpen(false);
           setIsAdaptOpen(true);
         }}
+        profile={profile}
       />
 
       {/* 2. Adaptive Workout Modal */}
@@ -893,6 +932,9 @@ export default function App() {
           setIsLineBotOpen(false);
           setIsAdaptOpen(true);
         }}
+        onOpenTrainerMemory={() => {
+          setIsTrainerMemoryOpen(true);
+        }}
         onOpenRichMenuStudio={() => {
           setIsLineBotOpen(false);
           setIsRichMenuStudioOpen(true);
@@ -941,6 +983,14 @@ export default function App() {
         isOpen={isPlan3MonthsOpen}
         onClose={() => setIsPlan3MonthsOpen(false)}
         profile={profile}
+      />
+
+      {/* 12. Trainer's Memory & Injury Notebook Modal */}
+      <TrainerMemoryModal
+        isOpen={isTrainerMemoryOpen}
+        onClose={() => setIsTrainerMemoryOpen(false)}
+        profile={profile}
+        onSaveProfile={handleSaveTrainerMemory}
       />
     </div>
   );

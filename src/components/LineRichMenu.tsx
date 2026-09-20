@@ -6,6 +6,7 @@ import {
   BarChart3,
   Sparkles,
   SlidersHorizontal,
+  Brain,
 } from "lucide-react";
 
 interface LineRichMenuProps {
@@ -35,6 +36,15 @@ export const LineRichMenu: React.FC<LineRichMenuProps> = ({ onSelectAction }) =>
       iconColor: "text-emerald-400",
     },
     {
+      id: "trainer_memory",
+      title: "ความจำโค้ช",
+      subtitle: "จุดเจ็บ & โน้ต (MEMORY)",
+      icon: Brain,
+      bg: "bg-[#1E293B] hover:bg-[#334155]",
+      border: "border-indigo-500/40",
+      iconColor: "text-indigo-400",
+    },
+    {
       id: "recovery",
       title: "การฟื้นตัว",
       subtitle: "การนอน (RECOVER)",
@@ -51,15 +61,6 @@ export const LineRichMenu: React.FC<LineRichMenuProps> = ({ onSelectAction }) =>
       bg: "bg-[#1E293B] hover:bg-[#334155]",
       border: "border-[#334155]",
       iconColor: "text-teal-400",
-    },
-    {
-      id: "coach_tip",
-      title: "คำแนะนำโค้ช",
-      subtitle: "คำแนะนำประจำวัน",
-      icon: Sparkles,
-      bg: "bg-[#1E293B] hover:bg-[#334155]",
-      border: "border-[#334155]",
-      iconColor: "text-yellow-400",
     },
     {
       id: "adapt",
