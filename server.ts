@@ -8,6 +8,7 @@ import { googleFitRouter } from "./google-fit";
 import { lineWebhookHandler } from "./line-webhook";
 import { getUserData, saveUserData } from "./db";
 import { generateCoachResponseStructured, type HistoryItem } from "./coach-ai";
+import { registerLineRichMenuRoutes } from "./line-richmenu";
 
 async function startServer() {
   const app = express();
@@ -55,6 +56,9 @@ async function startServer() {
 
   // LINE Bot Webhook
   app.post("/webhook", lineWebhookHandler);
+
+  // LINE Rich Menu admin routes (protected by ADMIN_KEY inside line-richmenu.ts)
+  registerLineRichMenuRoutes(app);
 
   // ----------------------------------------------------
   // User Data

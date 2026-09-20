@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import zlib from "zlib";
+import sharp from "sharp";
 import type { Express, Request, Response } from "express";
 
 const LINE_API_BASE = "https://api.line.me/v2/bot";
@@ -51,84 +51,33 @@ function makePngChunk(type: string, data: Buffer): Buffer {
  * Generate a standalone 2500x1686 PNG image buffer in pure Node.js (zero C++ dependencies)
  * Features a 2x3 athletic grid with emerald/dark accents compliant with LINE Rich Menu specs.
  */
-export function generateDefaultRichMenuPng(): Buffer {
+export async function generateDefaultRichMenuPng(): Promise<Buffer> {
   const width = 2500;
   const height = 1686;
-  const cols = 3;
-  const rows = 2;
-  const tileW = Math.floor(width / cols);
-  const tileH = Math.floor(height / rows);
-
-  // Raw uncompressed scanlines (1 filter byte + width * 3 RGB bytes per row)
-  const rowBytes = 1 + width * 3;
-  const raw = Buffer.alloc(rowBytes * height);
-
-  // Palette definition
-  const colorBg = [15, 23, 42]; // Slate 900
-  const colorTile = [21, 31, 50]; // Slate 850
-  const colorBorder = [51, 65, 85]; // Slate 700
-  const colorAccent = [6, 199, 85]; // LINE Green #06C755
-  const colorAccentAlt = [16, 185, 129]; // Emerald #10B981
-
-  for (let y = 0; y < height; y++) {
-    const rowOffset = y * rowBytes;
-    raw[rowOffset] = 0; // Filter: None
-
-    const rowIdx = Math.floor(y / tileH);
-    const inTileY = y % tileH;
-
-    for (let x = 0; x < width; x++) {
-      const colIdx = Math.floor(x / tileW);
-      const inTileX = x % tileW;
-      const pixelOffset = rowOffset + 1 + x * 3;
-
-      const isBorderX = inTileX < 8 || inTileX >= tileW - 8;
-      const isBorderY = inTileY < 8 || inTileY >= tileH - 8;
-      const isTopAccent = inTileY >= 8 && inTileY < 24 && inTileX >= 8 && inTileX < tileW - 8;
-
-      let r: number, g: number, b: number;
-
-      if (isTopAccent) {
-        if (colIdx === 0 && rowIdx === 0) {
-          [r, g, b] = colorAccentAlt;
-        } else if (colIdx === 0 && rowIdx === 1) {
-          [r, g, b] = [244, 63, 94]; // Rose for discipline
-        } else {
-          [r, g, b] = colorAccent;
-        }
-      } else if (isBorderX || isBorderY) {
-        [r, g, b] = colorBorder;
-      } else {
-        // Tile subtle vertical gradient
-        const grad = Math.floor((inTileY / tileH) * 12);
-        r = Math.min(255, colorTile[0] + grad);
-        g = Math.min(255, colorTile[1] + grad);
-        b = Math.min(255, colorTile[2] + grad);
-      }
-
-      raw[pixelOffset] = r;
-      raw[pixelOffset + 1] = g;
-      raw[pixelOffset + 2] = b;
-    }
-  }
-
-  // Build PNG container
-  const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
-  const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(width, 0);
-  ihdr.writeUInt32BE(height, 4);
-  ihdr[8] = 8; // 8-bit depth
-  ihdr[9] = 2; // Color type 2: truecolor RGB
-  ihdr[10] = 0;
-  ihdr[11] = 0;
-  ihdr[12] = 0;
-
-  const deflated = zlib.deflateSync(raw, { level: 9 });
-  const ihdrChunk = makePngChunk("IHDR", ihdr);
-  const idatChunk = makePngChunk("IDAT", deflated);
-  const iendChunk = makePngChunk("IEND", Buffer.alloc(0));
-
-  return Buffer.concat([signature, ihdrChunk, idatChunk, iendChunk]);
+  const tileW = 833;
+  const tileH = 843;
+  const tiles = [
+    { x: 0, y: 0, title: "WORKOUT", subtitle: "โปรแกรมวันนี้", accent: "#22C55E" },
+    { x: 833, y: 0, title: "NUTRITION", subtitle: "บันทึกอาหาร", accent: "#F59E0B" },
+    { x: 1667, y: 0, title: "COACH", subtitle: "คุยกับ AI Coach", accent: "#60A5FA" },
+    { x: 0, y: 843, title: "DISCIPLINE", subtitle: "เช็ควินัย + ตารางซ้อม", accent: "#A78BFA" },
+    { x: 833, y: 843, title: "ADAPT", subtitle: "ปรับแผนวันนี้", accent: "#06B6D4" },
+    { x: 1667, y: 843, title: "PROGRESS", subtitle: "สรุปผลการฝึก", accent: "#F472B6" },
+  ];
+  const rects = tiles.map((t) => `
+    <rect x="${t.x + 8}" y="${t.y + 8}" width="${tileW - 16}" height="${tileH - 16}" rx="42" fill="#111827" stroke="#263244" stroke-width="4"/>
+    <rect x="${t.x + 32}" y="${t.y + 32}" width="140" height="12" rx="6" fill="${t.accent}"/>
+    <circle cx="${t.x + 90}" cy="${t.y + 130}" r="34" fill="${t.accent}" opacity="0.18" stroke="${t.accent}" stroke-width="3"/>
+    <text x="${t.x + 150}" y="${t.y + 148}" font-family="Noto Sans, Noto Sans Thai, Arial" font-size="52" font-weight="800" fill="#F8FAFC">${t.title}</text>
+    <text x="${t.x + 80}" y="${t.y + 255}" font-family="Noto Sans Thai, Noto Sans, Arial" font-size="40" font-weight="700" fill="#D1D5DB">${t.subtitle}</text>
+    <text x="${t.x + 80}" y="${t.y + 330}" font-family="Noto Sans, Noto Sans Thai, Arial" font-size="28" fill="#6B7280">FITCOACH AI</text>
+  `).join("\n");
+  const svg = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
+    <defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0F172A"/><stop offset="100%" stop-color="#070B14"/></linearGradient></defs>
+    <rect width="${width}" height="${height}" fill="url(#bg)"/>
+    ${rects}
+  </svg>`;
+  return sharp(Buffer.from(svg)).png().toBuffer();
 }
 
 /**
@@ -284,7 +233,7 @@ export function registerLineRichMenuRoutes(app: Express) {
         const cleanBase64 = req.body.imageBase64.replace(/^data:image\/\w+;base64,/, "");
         imageBuffer = Buffer.from(cleanBase64, "base64");
       } else {
-        imageBuffer = generateDefaultRichMenuPng();
+        imageBuffer = await generateDefaultRichMenuPng();
       }
 
       // Step 3: Upload Image to api-data.line.me

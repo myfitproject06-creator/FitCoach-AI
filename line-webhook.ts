@@ -1,27 +1,22 @@
-// line-webhook.ts - Webhook LINE Bot
+// line-webhook.ts - Phase 5: LINE Coach Actions + Success + Rich Menu
 import { Request, Response } from "express";
 import crypto from "crypto";
 import { getUserData, saveUserData } from "./db";
 import type { ChatMessage, CoachActionType, CoachResponse } from "./src/types";
 import { generateCoachResponseStructured } from "./coach-ai";
-import { buildLineReplyMessages, type LineMessagePayload } from "./line-flex";
+import { executeCoachTool, bangkokToday } from "./coach-plan";
+import {
+  buildLineReplyMessages,
+  buildWorkoutSuccessMessages,
+  type LineMessagePayload,
+} from "./line-flex";
 
 interface LineEvent {
   type: string;
   replyToken?: string;
-  source?: {
-    userId?: string;
-    type?: string;
-  };
-  message?: {
-    type: string;
-    id: string;
-    text?: string;
-  };
-  postback?: {
-    data?: string;
-    params?: Record<string, string>;
-  };
+  source?: { userId?: string; type?: string };
+  message?: { type: string; id: string; text?: string };
+  postback?: { data?: string; params?: Record<string, string> };
   timestamp?: number;
 }
 
@@ -40,37 +35,23 @@ export function verifyLineSignature(rawBody: Buffer | string, signature: string,
     .createHmac("SHA256", channelSecret)
     .update(typeof rawBody === "string" ? Buffer.from(rawBody, "utf-8") : rawBody)
     .digest("base64");
-
   if (signature.length !== expectedSignature.length) return false;
   return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature));
 }
 
-async function replyLineMessages(
-  replyToken: string,
-  messages: LineMessagePayload[],
-  accessToken: string,
-): Promise<boolean> {
+async function replyLineMessages(replyToken: string, messages: LineMessagePayload[], accessToken: string): Promise<boolean> {
   if (!accessToken) {
     console.warn("[LINE Webhook] Missing LINE_CHANNEL_ACCESS_TOKEN");
     return false;
   }
-
   try {
     const response = await fetch("https://api.line.me/v2/bot/message/reply", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({
-        replyToken,
-        messages: messages.slice(0, 5),
-      }),
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ replyToken, messages: messages.slice(0, 5) }),
     });
-
     if (!response.ok) {
-      const errText = await response.text();
-      console.error("[LINE Webhook] Reply error:", response.status, errText);
+      console.error("[LINE Webhook] Reply error:", response.status, await response.text());
       return false;
     }
     return true;
@@ -80,56 +61,54 @@ async function replyLineMessages(
   }
 }
 
-function parseActionPostback(data: string): { actionType: CoachActionType; id?: string } | null {
+function parseFitCoachPostback(data: string):
+  | { kind: "coach"; actionType: CoachActionType; id?: string }
+  | { kind: "menu"; action: string }
+  | null {
   const params = new URLSearchParams(data);
-  if (params.get("fitcoach_action") === null) return null;
+  const fitcoachAction = params.get("fitcoach_action");
+  if (fitcoachAction) {
+    const allowed: CoachActionType[] = [
+      "start_workout", "snooze", "cannot_do", "view_plan", "log_food",
+      "apply_program", "clear_penalty", "confirm", "edit",
+    ];
+    if (!allowed.includes(fitcoachAction as CoachActionType)) return null;
+    return { kind: "coach", actionType: fitcoachAction as CoachActionType, id: params.get("id") || undefined };
+  }
 
-  const rawAction = params.get("fitcoach_action") || "";
-  const allowed: CoachActionType[] = [
-    "start_workout",
-    "snooze",
-    "cannot_do",
-    "view_plan",
-    "log_food",
-    "apply_program",
-    "clear_penalty",
-    "confirm",
-    "edit",
-  ];
-
-  if (!allowed.includes(rawAction as CoachActionType)) return null;
-  return {
-    actionType: rawAction as CoachActionType,
-    id: params.get("id") || undefined,
-  };
+  const menuAction = params.get("action");
+  if (menuAction) return { kind: "menu", action: menuAction };
+  return null;
 }
 
 function actionToCoachMessage(actionType: CoachActionType): string {
   switch (actionType) {
-    case "start_workout":
-      return "ผู้ใช้กดเริ่มออกกำลังกายครับ ช่วยพาเข้าสู่โปรแกรมวันนี้และบอกขั้นตอนถัดไปให้ด้วย";
-    case "snooze":
-      return "ผู้ใช้ขอเลื่อนการออกกำลังกายออกไป ช่วยยืนยันการเลื่อนและแนะนำเวลาถัดไปให้ด้วย";
-    case "cannot_do":
-      return "วันนี้ผู้ใช้ทำโปรแกรมเดิมไม่ได้ ช่วยปรับโปรแกรมให้เหมาะกับสภาพร่างกายหรือเวลาที่มีตอนนี้";
-    case "view_plan":
-      return "ผู้ใช้ต้องการดูรายละเอียดโปรแกรมวันนี้ ช่วยสรุปโปรแกรมให้กระชับและอ่านง่าย";
-    case "log_food":
-      return "ผู้ใช้ต้องการบันทึกอาหาร ช่วยถามข้อมูลอาหารที่จำเป็นเพื่อบันทึกมื้ออาหาร";
-    case "apply_program":
-      return "ผู้ใช้ยืนยันต้องการใช้โปรแกรมนี้ ช่วยยืนยันการเลือกโปรแกรมและบอกขั้นตอนถัดไป";
-    case "clear_penalty":
-      return "ผู้ใช้ต้องการจัดการภารกิจที่ค้างอยู่ ช่วยสรุปสิ่งที่ต้องทำต่อให้ชัดเจน";
-    case "confirm":
-      return "ผู้ใช้ยืนยันการดำเนินการล่าสุด ช่วยยืนยันสิ่งที่ระบบควรทำต่อ";
-    case "edit":
-      return "ผู้ใช้ต้องการแก้ไขรายการล่าสุด ช่วยถามข้อมูลที่ต้องแก้ไข";
-    default:
-      return "ผู้ใช้กดปุ่มจากการ์ด FitCoach ช่วยดำเนินการต่ออย่างเหมาะสม";
+    case "start_workout": return "ผู้ใช้กดเริ่มออกกำลังกายครับ ช่วยเปิดโปรแกรมวันนี้และบอกขั้นตอนถัดไปให้ด้วย";
+    case "snooze": return "ผู้ใช้ขอเลื่อนการออกกำลังกายออกไป ช่วยยืนยันการเลื่อนและแนะนำเวลาถัดไปให้ด้วย";
+    case "cannot_do": return "วันนี้ผู้ใช้ทำโปรแกรมเดิมไม่ได้ ช่วยปรับโปรแกรมให้เหมาะกับสภาพร่างกายหรือเวลาที่มีตอนนี้";
+    case "view_plan": return "ผู้ใช้ต้องการดูรายละเอียดโปรแกรมวันนี้ ช่วยสรุปโปรแกรมให้กระชับและอ่านง่าย";
+    case "log_food": return "ผู้ใช้ต้องการบันทึกอาหาร ช่วยถามข้อมูลอาหารที่จำเป็นเพื่อบันทึกมื้ออาหาร";
+    case "apply_program": return "ผู้ใช้ยืนยันต้องการใช้โปรแกรมนี้ ช่วยยืนยันการเลือกโปรแกรมและบอกขั้นตอนถัดไป";
+    case "clear_penalty": return "ผู้ใช้ต้องการจัดการภารกิจที่ค้างอยู่ ช่วยสรุปสิ่งที่ต้องทำต่อให้ชัดเจน";
+    case "confirm": return "ผู้ใช้ยืนยันการดำเนินการล่าสุด ช่วยยืนยันสิ่งที่ระบบควรทำต่อ";
+    case "edit": return "ผู้ใช้ต้องการแก้ไขรายการล่าสุด ช่วยถามข้อมูลที่ต้องแก้ไข";
+    default: return "ผู้ใช้กดปุ่มจาก FitCoach ช่วยดำเนินการต่ออย่างเหมาะสม";
   }
 }
 
-function fallbackCoachResponseForAction(actionType: CoachActionType): CoachResponse {
+function menuActionToCoachMessage(action: string): string {
+  switch (action) {
+    case "workout_today": return "ขอโปรแกรมฝึกวันนี้จากแผนจริงของฉัน พร้อมรายละเอียดท่าฝึกด้วยครับ";
+    case "log_food": return "ช่วยบันทึกอาหารวันนี้ให้หน่อยครับ เริ่มจากถามข้อมูลที่จำเป็นได้เลย";
+    case "plan_3months": return "ช่วยสรุปแผนการฝึกระยะยาวของฉันจากข้อมูลจริงในระบบให้หน่อยครับ";
+    case "discipline_check": return "ช่วยเช็คสถานะวินัย ตารางซ้อม และเวลานัดซ้อมของฉันตอนนี้ครับ";
+    case "adaptive_workout": return "วันนี้ผมรู้สึกเหนื่อยมาก ช่วยปรับแผนการฝึกให้เบาลงตามข้อมูลจริงของผมครับ";
+    case "weekly_report": return "ช่วยสรุปผลการออกกำลังกายของฉันในสัปดาห์นี้จากข้อมูลจริงครับ";
+    default: return "ช่วยดูสถานะการฝึกของฉันตอนนี้และแนะนำสิ่งที่ควรทำต่อครับ";
+  }
+}
+
+function fallbackActionResponse(actionType: CoachActionType): CoachResponse {
   const messages: Record<CoachActionType, string> = {
     start_workout: "เริ่มได้เลยครับ 💪 เปิดโปรแกรมวันนี้แล้วทำตามลำดับทีละท่าได้เลย",
     snooze: "รับทราบครับ ผมจะถือว่าคุณขอเลื่อนการฝึกไว้ก่อน",
@@ -141,26 +120,88 @@ function fallbackCoachResponseForAction(actionType: CoachActionType): CoachRespo
     confirm: "ยืนยันเรียบร้อยครับ",
     edit: "ได้ครับ บอกส่วนที่ต้องการแก้ไขได้เลย",
   };
-
   return { message: messages[actionType], type: "chat" };
 }
 
-async function handlePostbackAction(
+async function handleCompleteWorkout(
   event: LineEvent,
   userId: string,
   channelAccessToken: string,
 ): Promise<void> {
+  if (!event.replyToken) return;
+
+  const userData = await getUserData(userId);
+  const date = bangkokToday();
+  const day = userData?.coachPlan?.days?.find((d) => d.date === date);
+  const workout = userData?.workout;
+
+  const exercises = (day?.exercises || workout?.exercises || []).map((e) => ({
+    name: e.nameTh || e.name,
+    reps: String(e.reps ?? ""),
+    weight: e.suggestedWeight,
+  }));
+
+  const result = await executeCoachTool(userId, "log_workout", {
+    date,
+    completed: true,
+    exercises,
+  });
+
+  console.log("[Coach Action] complete_workout ->", JSON.stringify(result));
+
+  if (!result.ok) {
+    await replyLineMessages(event.replyToken, [{
+      type: "text",
+      text: `ยังบันทึก Workout ไม่สำเร็จครับ: ${String(result.error || "ไม่ทราบสาเหตุ")} `,
+    }], channelAccessToken);
+    return;
+  }
+
+  const title = day?.title || workout?.titleTh || workout?.title || "Workout วันนี้";
+  const durationMinutes = day?.durationMinutes || workout?.durationMinutes;
+  const streakDays = userData?.status?.streakDays ?? userData?.status?.momentumDays;
+
+  const successMessages = buildWorkoutSuccessMessages({
+    title,
+    durationMinutes,
+    completedExercises: exercises.length || undefined,
+    streakDays,
+  });
+
+  const previous: ChatMessage[] = userData?.messages || [];
+  const now = Date.now();
+  const displayText = "กดเสร็จแล้ว — บันทึก Workout วันนี้";
+  const updatedMessages: ChatMessage[] = [
+    ...previous,
+    { id: `u-${now}`, sender: "user", text: displayText, timestamp: new Date(now).toISOString() },
+    { id: `c-${now}`, sender: "coach", text: "บันทึก Workout สำเร็จแล้วครับ!", timestamp: new Date().toISOString() },
+  ].slice(-40);
+  await saveUserData(userId, { messages: updatedMessages });
+
+  await replyLineMessages(event.replyToken, successMessages, channelAccessToken);
+}
+
+async function handlePostbackAction(event: LineEvent, userId: string, channelAccessToken: string): Promise<void> {
   if (!event.replyToken || !event.postback?.data) return;
-  const parsed = parseActionPostback(event.postback.data);
+  const parsed = parseFitCoachPostback(event.postback.data);
   if (!parsed) return;
+
+  if (parsed.kind === "coach" && parsed.id === "complete_workout") {
+    await handleCompleteWorkout(event, userId, channelAccessToken);
+    return;
+  }
 
   const userData = await getUserData(userId);
   const previous: ChatMessage[] = userData?.messages || [];
   let response: CoachResponse;
 
   try {
+    const prompt = parsed.kind === "coach"
+      ? actionToCoachMessage(parsed.actionType)
+      : menuActionToCoachMessage(parsed.action);
+
     response = await generateCoachResponseStructured(
-      actionToCoachMessage(parsed.actionType),
+      prompt,
       {
         userProfile: userData?.profile,
         workoutPlan: userData?.workout,
@@ -176,20 +217,24 @@ async function handlePostbackAction(
     );
   } catch (err) {
     console.error("[LINE Webhook] Postback AI error:", err);
-    response = fallbackCoachResponseForAction(parsed.actionType);
+    response = parsed.kind === "coach" ? fallbackActionResponse(parsed.actionType) : {
+      message: "รับทราบครับ เดี๋ยวโค้ชช่วยดูข้อมูลให้ครับ 💪",
+      type: "chat",
+    };
   }
 
   const now = Date.now();
-  const displayText = event.postback.params
-    ? `${parsed.actionType}: ${JSON.stringify(event.postback.params)}`
-    : parsed.actionType;
+  const displayText = parsed.kind === "coach"
+    ? `${parsed.actionType}${parsed.id ? `:${parsed.id}` : ""}`
+    : `เมนู:${parsed.action}`;
+
   const updatedMessages: ChatMessage[] = [
     ...previous,
-    { id: `u-${now}`, sender: "user" as const, text: displayText, timestamp: new Date(now).toISOString() },
-    { id: `c-${now}`, sender: "coach" as const, text: response.message, timestamp: new Date().toISOString(), coachResponse: response },
+    { id: `u-${now}`, sender: "user", text: displayText, timestamp: new Date(now).toISOString() },
+    { id: `c-${now}`, sender: "coach", text: response.message, timestamp: new Date().toISOString(), coachResponse: response },
   ].slice(-40);
-  await saveUserData(userId, { messages: updatedMessages });
 
+  await saveUserData(userId, { messages: updatedMessages });
   await replyLineMessages(event.replyToken, buildLineReplyMessages(response), channelAccessToken);
 }
 
@@ -197,8 +242,8 @@ export async function lineWebhookHandler(req: Request, res: Response) {
   const channelSecret = process.env.LINE_CHANNEL_SECRET || "";
   const channelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN || "";
   const signature = req.get("x-line-signature") || "";
-
   const rawBody = (req as any).rawBody || JSON.stringify(req.body);
+
   if (channelSecret && !verifyLineSignature(rawBody, signature, channelSecret)) {
     console.error("[LINE Webhook] Signature verification failed!");
     return res.status(401).send("Invalid Signature");
@@ -207,7 +252,6 @@ export async function lineWebhookHandler(req: Request, res: Response) {
   const body = req.body as LineWebhookBody;
   const events = body?.events || [];
   console.log(`[LINE Webhook] Received ${events.length} event(s)`);
-
   res.status(200).send("OK");
 
   for (const event of events) {
@@ -227,7 +271,6 @@ export async function lineWebhookHandler(req: Request, res: Response) {
 
       const userText = event.message.text || "";
       console.log(`[LINE Webhook] Message from userId=${userId}: "${userText}"`);
-
       const userData = await getUserData(userId);
       const hasProfile = Boolean(userData?.profile?.name && userData.profile.name.trim().length > 0);
 
@@ -235,8 +278,10 @@ export async function lineWebhookHandler(req: Request, res: Response) {
         const host = req.get("host") || "localhost:3000";
         const protocol = req.protocol === "https" || req.get("x-forwarded-proto") === "https" ? "https" : "http";
         const appUrl = (process.env.APP_URL || `${protocol}://${host}`).replace(/\/$/, "");
-        const replyText = `สวัสดีครับ ยินดีต้อนรับสู่ FitCoach AI!\n\nกรุณาเข้าสู่ระบบและประเมินร่างกายเพื่อสร้างแผนที่เหมาะสมกับคุณ:\n${appUrl}\n\nโค้ชพร้อมดูแลตลอด 24 ชม. ครับ!`;
-        await replyLineMessages(event.replyToken, [{ type: "text", text: replyText.slice(0, 5000) }], channelAccessToken);
+        await replyLineMessages(event.replyToken, [{
+          type: "text",
+          text: `สวัสดีครับ ยินดีต้อนรับสู่ FitCoach AI!\n\nกรุณาเข้าสู่ระบบและประเมินร่างกายเพื่อสร้างแผนที่เหมาะสมกับคุณ:\n${appUrl}\n\nโค้ชพร้อมดูแลตลอด 24 ชม. ครับ!`,
+        }], channelAccessToken);
         continue;
       }
 
@@ -260,13 +305,12 @@ export async function lineWebhookHandler(req: Request, res: Response) {
       const now = Date.now();
       const updatedMessages: ChatMessage[] = [
         ...previous,
-        { id: `u-${now}`, sender: "user" as const, text: userText, timestamp: new Date(now).toISOString() },
-        { id: `c-${now}`, sender: "coach" as const, text: response.message, timestamp: new Date().toISOString(), coachResponse: response },
+        { id: `u-${now}`, sender: "user", text: userText, timestamp: new Date(now).toISOString() },
+        { id: `c-${now}`, sender: "coach", text: response.message, timestamp: new Date().toISOString(), coachResponse: response },
       ].slice(-40);
       await saveUserData(userId, { messages: updatedMessages });
 
-      const messages = buildLineReplyMessages(response);
-      await replyLineMessages(event.replyToken, messages, channelAccessToken);
+      await replyLineMessages(event.replyToken, buildLineReplyMessages(response), channelAccessToken);
     } catch (err) {
       console.error("[LINE Webhook] Error processing event:", err);
     }

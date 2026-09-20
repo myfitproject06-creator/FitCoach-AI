@@ -1,23 +1,13 @@
 import type { CoachAction, CoachResponse, CoachResponseExercise } from "./src/types";
 
 /**
- * LINE Flex Message renderer for the canonical FitCoach CoachResponse.
- *
- * The AI returns product data, not LINE JSON. This file is the LINE-specific
- * adapter so the same CoachResponse can later be rendered by Web, LINE,
- * mobile, or other channels without changing the AI layer.
+ * LINE Flex renderer for FitCoach.
+ * Phase 5 adds a deterministic "เสร็จแล้ว" action so workout completion
+ * can be written to Firebase before the success message is shown.
  */
-
 export type LineMessagePayload =
-  | {
-      type: "text";
-      text: string;
-    }
-  | {
-      type: "flex";
-      altText: string;
-      contents: LineFlexBubble;
-    };
+  | { type: "text"; text: string }
+  | { type: "flex"; altText: string; contents: LineFlexBubble };
 
 interface LineFlexBubble {
   type: "bubble";
@@ -75,7 +65,7 @@ function pill(label: string, color = COLORS.soft, textColor = COLORS.muted) {
 function safeAction(action: CoachAction): Record<string, unknown> {
   return {
     type: "button",
-    style: action.style === "secondary" ? "secondary" : action.style === "danger" ? "secondary" : "primary",
+    style: action.style === "secondary" ? "secondary" : "primary",
     color: action.style === "danger" ? COLORS.red : COLORS.ink,
     height: "sm",
     action: {
@@ -84,6 +74,17 @@ function safeAction(action: CoachAction): Record<string, unknown> {
       data: `fitcoach_action=${encodeURIComponent(action.actionType)}&id=${encodeURIComponent(action.id)}`.slice(0, 300),
       displayText: action.label.slice(0, 300),
     },
+  };
+}
+
+function completionAction(): CoachAction {
+  // Reuses the existing "confirm" action type for backward compatibility.
+  // The id is the deterministic command handled by line-webhook.ts.
+  return {
+    id: "complete_workout",
+    label: "เสร็จแล้ว ✓",
+    actionType: "confirm",
+    style: "primary",
   };
 }
 
@@ -144,15 +145,7 @@ function exerciseRow(exercise: CoachResponseExercise, index: number) {
           text(exercise.nameTh || exercise.name, "sm", "bold"),
           ...(exercise.nameTh ? [text(exercise.name, "xs", "regular", COLORS.muted)] : []),
           ...(stats.length
-            ? [
-                {
-                  type: "box",
-                  layout: "horizontal",
-                  spacing: "sm",
-                  margin: "xs",
-                  contents: stats.map((item) => text(item, "xs", "bold", COLORS.muted)),
-                },
-              ]
+            ? [{ type: "box", layout: "horizontal", spacing: "sm", margin: "xs", contents: stats.map((item) => text(item, "xs", "bold", COLORS.muted)) }]
             : []),
           ...(exercise.note ? [text(exercise.note, "xs", "regular", COLORS.muted)] : []),
         ],
@@ -169,80 +162,32 @@ function buildWorkoutBubble(response: CoachResponse): LineFlexBubble {
     text(meta.label, "xs", "bold", meta.accent),
     text(d.titleTh || d.title || (response.type === "workout_reminder" ? "โปรแกรมวันนี้" : "Workout Plan"), "lg", "bold"),
   ];
-
-  const metaItems = [
-    d.durationMinutes != null ? `${d.durationMinutes} นาที` : "",
-    d.intensity || "",
-    d.focus || "",
-  ].filter(Boolean);
-
+  const metaItems = [d.durationMinutes != null ? `${d.durationMinutes} นาที` : "", d.intensity || "", d.focus || ""].filter(Boolean);
   const bodyContents: Record<string, unknown>[] = [
-    {
-      type: "box",
-      layout: "horizontal",
-      spacing: "sm",
-      contents: metaItems.slice(0, 3).map((item) => pill(item, meta.soft, meta.accent)),
-    },
+    { type: "box", layout: "horizontal", spacing: "sm", contents: metaItems.slice(0, 3).map((item) => pill(item, meta.soft, meta.accent)) },
   ];
 
-  if (d.summary) {
-    bodyContents.push(text(d.summary, "sm", "regular", COLORS.muted));
-  }
-
+  if (d.summary) bodyContents.push(text(d.summary, "sm", "regular", COLORS.muted));
   if (exercises.length) {
     bodyContents.push(separator());
     bodyContents.push(text("รายการฝึก", "sm", "bold"));
-    bodyContents.push({
-      type: "box",
-      layout: "vertical",
-      margin: "sm",
-      spacing: "sm",
-      contents: exercises.slice(0, 8).map(exerciseRow),
-    });
+    bodyContents.push({ type: "box", layout: "vertical", margin: "sm", spacing: "sm", contents: exercises.slice(0, 8).map(exerciseRow) });
   }
-
-  if (d.reason) {
-    bodyContents.push(separator());
-    bodyContents.push(text(`เหตุผล: ${d.reason}`, "xs", "regular", COLORS.muted));
-  }
-
+  if (d.reason) bodyContents.push(separator(), text(`เหตุผล: ${d.reason}`, "xs", "regular", COLORS.muted));
   if (d.tags?.length) {
-    bodyContents.push({
-      type: "box",
-      layout: "horizontal",
-      spacing: "sm",
-      margin: "md",
-      contents: d.tags.slice(0, 6).map((tag) => pill(`#${tag}`)),
-    });
+    bodyContents.push({ type: "box", layout: "horizontal", spacing: "sm", margin: "md", contents: d.tags.slice(0, 6).map((tag) => pill(`#${tag}`)) });
   }
+
+  const actions = [...(response.actions || [])];
+  if (!actions.some((a) => a.id === "complete_workout")) actions.push(completionAction());
 
   return {
     type: "bubble",
     size: "mega",
-    header: {
-      type: "box",
-      layout: "vertical",
-      backgroundColor: COLORS.surface,
-      paddingAll: "lg",
-      contents: headerContents,
-    },
-    body: {
-      type: "box",
-      layout: "vertical",
-      backgroundColor: COLORS.surface,
-      paddingAll: "lg",
-      spacing: "md",
-      contents: bodyContents,
-    },
-    footer: response.actions?.length
-      ? {
-          type: "box",
-          layout: "vertical",
-          backgroundColor: COLORS.surface,
-          paddingAll: "lg",
-          spacing: "sm",
-          contents: response.actions.slice(0, 3).map(safeAction),
-        }
+    header: { type: "box", layout: "vertical", backgroundColor: COLORS.surface, paddingAll: "lg", contents: headerContents },
+    body: { type: "box", layout: "vertical", backgroundColor: COLORS.surface, paddingAll: "lg", spacing: "md", contents: bodyContents },
+    footer: actions.length
+      ? { type: "box", layout: "vertical", backgroundColor: COLORS.surface, paddingAll: "lg", spacing: "sm", contents: actions.slice(0, 3).map(safeAction) }
       : undefined,
   };
 }
@@ -251,55 +196,26 @@ function buildDetailBubble(response: CoachResponse): LineFlexBubble {
   const d = response.data || {};
   const meta = typeLabel(response);
   const stats: Record<string, unknown>[] = [];
-
   if (d.calories != null) stats.push(pill(`${d.calories} kcal`, COLORS.amberSoft, COLORS.amber));
   if (d.proteinGrams != null) stats.push(pill(`${d.proteinGrams} g โปรตีน`, COLORS.redSoft, COLORS.red));
   if (d.sleepHours != null) stats.push(pill(`${d.sleepHours} ชม.`, COLORS.purpleSoft, COLORS.purple));
   if (d.recoveryScore != null) stats.push(pill(`Recovery ${d.recoveryScore}%`, COLORS.greenSoft, COLORS.green));
-
   const bodyContents: Record<string, unknown>[] = [
     text(meta.label, "xs", "bold", meta.accent),
     text(d.titleTh || d.title || "ข้อมูลจากโค้ช", "lg", "bold"),
   ];
-
   if (d.summary) bodyContents.push(text(d.summary, "sm", "regular", COLORS.muted));
-  if (stats.length) {
-    bodyContents.push({ type: "box", layout: "horizontal", spacing: "sm", contents: stats.slice(0, 4) });
-  }
+  if (stats.length) bodyContents.push({ type: "box", layout: "horizontal", spacing: "sm", contents: stats.slice(0, 4) });
   if (d.reason) bodyContents.push(text(`เหตุผล: ${d.reason}`, "xs", "regular", COLORS.muted));
   if (d.reminderDate || d.reminderTime) {
-    bodyContents.push({
-      type: "box",
-      layout: "vertical",
-      backgroundColor: COLORS.amberSoft,
-      cornerRadius: "md",
-      paddingAll: "md",
-      margin: "sm",
-      contents: [
-        text(`🔔 ${d.reminderDate || "วันนี้"} ${d.reminderTime || ""}`.trim(), "sm", "bold", COLORS.amber),
-      ],
-    });
+    bodyContents.push({ type: "box", layout: "vertical", backgroundColor: COLORS.amberSoft, cornerRadius: "md", paddingAll: "md", margin: "sm", contents: [text(`🔔 ${d.reminderDate || "วันนี้"} ${d.reminderTime || ""}`.trim(), "sm", "bold", COLORS.amber)] });
   }
-
   return {
     type: "bubble",
     size: "mega",
-    body: {
-      type: "box",
-      layout: "vertical",
-      paddingAll: "lg",
-      spacing: "md",
-      backgroundColor: COLORS.surface,
-      contents: bodyContents,
-    },
+    body: { type: "box", layout: "vertical", paddingAll: "lg", spacing: "md", backgroundColor: COLORS.surface, contents: bodyContents },
     footer: response.actions?.length
-      ? {
-          type: "box",
-          layout: "vertical",
-          paddingAll: "lg",
-          spacing: "sm",
-          contents: response.actions.slice(0, 3).map(safeAction),
-        }
+      ? { type: "box", layout: "vertical", paddingAll: "lg", spacing: "sm", contents: response.actions.slice(0, 3).map(safeAction) }
       : undefined,
   };
 }
@@ -308,30 +224,57 @@ export function buildLineFlexMessage(response: CoachResponse): LineMessagePayloa
   const bubble = ["workout", "workout_reminder", "adapted_plan"].includes(response.type)
     ? buildWorkoutBubble(response)
     : buildDetailBubble(response);
+  const altText = `${response.data?.titleTh || response.data?.title || "FitCoach"}: ${response.message}`.replace(/\s+/g, " ").slice(0, 400);
+  return { type: "flex", altText, contents: bubble };
+}
 
-  const altText = `${response.data?.titleTh || response.data?.title || "FitCoach"}: ${response.message}`
-    .replace(/\s+/g, " ")
-    .slice(0, 400);
+export function buildWorkoutSuccessMessages(options: {
+  title?: string;
+  durationMinutes?: number;
+  completedExercises?: number;
+  rpe?: number;
+  streakDays?: number;
+} = {}): LineMessagePayload[] {
+  const title = options.title || "Workout วันนี้";
+  const stats = [
+    options.durationMinutes != null ? `${options.durationMinutes} นาที` : "เสร็จตามที่บันทึก",
+    options.completedExercises != null ? `${options.completedExercises} ท่า` : "บันทึกผลแล้ว",
+    options.rpe != null ? `RPE ${options.rpe}` : "",
+  ].filter(Boolean);
 
-  return {
-    type: "flex",
-    altText,
-    contents: bubble,
+  const bubble: LineFlexBubble = {
+    type: "bubble",
+    size: "mega",
+    body: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: COLORS.surface,
+      paddingAll: "xl",
+      spacing: "md",
+      contents: [
+        text("✓ WORKOUT COMPLETE", "sm", "bold", COLORS.green),
+        text("สำเร็จแล้ว! 💪", "xl", "bold"),
+        text(title, "lg", "bold"),
+        { type: "box", layout: "horizontal", spacing: "sm", margin: "sm", contents: stats.map((s) => pill(s, COLORS.greenSoft, COLORS.green)) },
+        separator(),
+        text("โค้ชบันทึกผลการฝึกไว้ในระบบแล้วครับ วันนี้ทำตามแผนได้อีกหนึ่งวัน 🔥", "sm", "regular", COLORS.muted),
+        ...(options.streakDays != null
+          ? [text(`🔥 Streak ${options.streakDays} วัน`, "sm", "bold", COLORS.amber)]
+          : []),
+      ],
+    },
   };
+
+  return [
+    { type: "text", text: "✅ บันทึก Workout สำเร็จแล้วครับ! 💪" },
+    { type: "flex", altText: `Workout สำเร็จแล้ว: ${title}`, contents: bubble },
+  ];
 }
 
 export function buildLineReplyMessages(response: CoachResponse): LineMessagePayload[] {
-  // Plain chat remains a normal LINE text message. Structured responses get a
-  // short coach message followed by a Flex card so the conversation still
-  // feels natural and remains readable on clients that cannot render cards.
-  if (response.type === "chat" && !response.actions?.length) {
-    return [{ type: "text", text: response.message.slice(0, 5000) }];
-  }
-
+  if (response.type === "chat" && !response.actions?.length) return [{ type: "text", text: response.message.slice(0, 5000) }];
   const messages: LineMessagePayload[] = [];
-  if (response.message.trim()) {
-    messages.push({ type: "text", text: response.message.slice(0, 5000) });
-  }
+  if (response.message.trim()) messages.push({ type: "text", text: response.message.slice(0, 5000) });
   messages.push(buildLineFlexMessage(response));
   return messages.slice(0, 5);
 }
