@@ -271,6 +271,64 @@ export function buildWorkoutSuccessMessages(options: {
   ];
 }
 
+export function buildWorkoutReminderMessages(options: {
+  title?: string;
+  focus?: string;
+  durationMinutes?: number;
+  exerciseCount?: number;
+  overdue?: boolean;
+} = {}): LineMessagePayload[] {
+  const title = options.title || "Workout วันนี้";
+  const prefix = options.overdue ? "⚠️ เลยเวลาซ้อมแล้วครับ" : "🔔 ถึงเวลาออกกำลังกายแล้วครับ";
+  const scheduleText = [
+    options.durationMinutes != null ? `${options.durationMinutes} นาที` : "",
+    options.focus || "",
+    options.exerciseCount ? `${options.exerciseCount} ท่า` : "",
+  ].filter(Boolean);
+
+  const button = (label: string, id: string, style: "primary" | "secondary" = "primary") =>
+    safeAction({ id, label, actionType: id === "reminder_snooze" ? "snooze" : id === "reminder_cannot_do" ? "cannot_do" : "start_workout", style });
+
+  const bubble: LineFlexBubble = {
+    type: "bubble",
+    size: "mega",
+    body: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: COLORS.surface,
+      paddingAll: "xl",
+      spacing: "md",
+      contents: [
+        text("เตือน", "sm", "bold", COLORS.amber),
+        text(prefix, "lg", "bold"),
+        text(title, "xl", "bold"),
+        ...(scheduleText.length
+          ? [{ type: "box", layout: "horizontal", spacing: "sm", contents: scheduleText.slice(0, 3).map((v) => pill(v, COLORS.amberSoft, COLORS.amber)) }]
+          : []),
+        separator(),
+        text(options.overdue ? "ยังไม่ได้บันทึกว่าเสร็จครับ เลือกสิ่งที่ต้องการทำต่อได้เลย" : "พร้อมเริ่มแล้วครับ เลือกการทำงานได้เลย", "sm", "regular", COLORS.muted),
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: COLORS.surface,
+      paddingAll: "lg",
+      spacing: "sm",
+      contents: [
+        button("เริ่มฝึก 💪", "reminder_start"),
+        button("เลื่อน 30 นาที", "reminder_snooze", "secondary"),
+        button("ทำไม่ได้วันนี้", "reminder_cannot_do", "secondary"),
+      ],
+    },
+  };
+
+  return [
+    { type: "text", text: `${prefix}\n${title}${options.focus ? ` • ${options.focus}` : ""}` },
+    { type: "flex", altText: `${prefix}: ${title}`, contents: bubble },
+  ];
+}
+
 export function buildLineReplyMessages(response: CoachResponse): LineMessagePayload[] {
   if (response.type === "chat" && !response.actions?.length) return [{ type: "text", text: response.message.slice(0, 5000) }];
   const messages: LineMessagePayload[] = [];

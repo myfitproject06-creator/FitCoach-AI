@@ -174,6 +174,19 @@ export async function saveUserData(userId: string, data: Partial<UserData>): Pro
   return updated;
 }
 
+export async function listUserData(): Promise<UserData[]> {
+  const db = getFirestore();
+  if (db) {
+    try {
+      const snap = await db.collection("users").get();
+      return snap.docs.map((doc) => doc.data() as UserData);
+    } catch (err) {
+      console.error("[DB Firestore] Error listUserData:", err);
+    }
+  }
+  return [...inMemoryUsers.values()];
+}
+
 export async function updateLineProfile(userId: string, lineProfile: LineUserProfile): Promise<UserData> {
   const existing = await getUserData(userId);
   const dataToSave: Partial<UserData> = {

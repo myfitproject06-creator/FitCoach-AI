@@ -5,8 +5,10 @@ import { getUserData, saveUserData } from "./db";
 import type { ChatMessage, CoachActionType, CoachResponse } from "./src/types";
 import { generateCoachResponseStructured } from "./coach-ai";
 import { executeCoachTool, bangkokToday } from "./coach-plan";
+import { snoozeWorkoutReminder, skipTodayWorkout } from "./reminder-engine";
 import {
   buildLineReplyMessages,
+  buildLineFlexMessage,
   buildWorkoutSuccessMessages,
   type LineMessagePayload,
 } from "./line-flex";
@@ -181,6 +183,71 @@ async function handleCompleteWorkout(
   await replyLineMessages(event.replyToken, successMessages, channelAccessToken);
 }
 
+async function handleReminderStart(event: LineEvent, userId: string, channelAccessToken: string): Promise<void> {
+  if (!event.replyToken) return;
+  const userData = await getUserData(userId);
+  const date = bangkokToday();
+  const day = userData?.coachPlan?.days?.find((d) => d.date === date);
+  const workout = userData?.workout;
+
+  if (!day && !workout) {
+    await replyLineMessages(event.replyToken, [{
+      type: "text",
+      text: "วันนี้ยังไม่มี Workout ในแผนครับ ถ้าต้องการ ผมช่วยจัดโปรแกรมให้ใหม่ได้เลย 💪",
+    }], channelAccessToken);
+    return;
+  }
+
+  const exercises = (day?.exercises || workout?.exercises || []).map((e: any) => ({
+    name: e.name || "Exercise",
+    nameTh: e.nameTh,
+    sets: Number(e.sets || 3),
+    reps: String(e.reps ?? "10"),
+    restSeconds: Number(e.restSeconds || 60),
+    suggestedWeight: e.suggestedWeight,
+    note: e.note || e.notes,
+  }));
+
+  const response: CoachResponse = {
+    message: "เริ่มได้เลยครับ 💪 ทำตามลำดับทีละท่าได้เลย และกด “เสร็จแล้ว ✓” เมื่อฝึกเสร็จ",
+    type: "workout",
+    data: {
+      title: day?.title || workout?.titleTh || workout?.title || workout?.name || "Workout วันนี้",
+      titleTh: day?.title || workout?.titleTh,
+      durationMinutes: day?.durationMinutes || workout?.durationMinutes,
+      focus: day?.focus || workout?.focusArea,
+      exercises,
+    },
+  };
+
+  await replyLineMessages(event.replyToken, [
+    { type: "text", text: response.message },
+    buildLineFlexMessage(response),
+  ], channelAccessToken);
+}
+
+async function handleReminderSnooze(event: LineEvent, userId: string, channelAccessToken: string): Promise<void> {
+  if (!event.replyToken) return;
+  const result = await snoozeWorkoutReminder(userId, 30);
+  await replyLineMessages(event.replyToken, [{
+    type: "text",
+    text: result.ok
+      ? "⏰ ได้ครับ เลื่อนการเตือนไป 30 นาทีแล้วครับ เดี๋ยวโค้ชเตือนอีกครั้ง 💪"
+      : `ยังเลื่อนการเตือนไม่ได้ครับ: ${result.error || "ไม่ทราบสาเหตุ"}`,
+  }], channelAccessToken);
+}
+
+async function handleReminderCannotDo(event: LineEvent, userId: string, channelAccessToken: string): Promise<void> {
+  if (!event.replyToken) return;
+  const result = await skipTodayWorkout(userId);
+  await replyLineMessages(event.replyToken, [{
+    type: "text",
+    text: result.ok
+      ? "รับทราบครับ วันนี้ผมบันทึกเป็น “ทำไม่ได้วันนี้” ไว้แล้วครับ 📝\n\nถ้าต้องการ ผมสามารถช่วยปรับแผนวันถัดไปให้เหมาะกับคุณได้ครับ"
+      : `ยังอัปเดตแผนไม่ได้ครับ: ${result.error || "ไม่ทราบสาเหตุ"}`,
+  }], channelAccessToken);
+}
+
 async function handlePostbackAction(event: LineEvent, userId: string, channelAccessToken: string): Promise<void> {
   if (!event.replyToken || !event.postback?.data) return;
   const parsed = parseFitCoachPostback(event.postback.data);
@@ -188,6 +255,21 @@ async function handlePostbackAction(event: LineEvent, userId: string, channelAcc
 
   if (parsed.kind === "coach" && parsed.id === "complete_workout") {
     await handleCompleteWorkout(event, userId, channelAccessToken);
+    return;
+  }
+
+  if (parsed.kind === "coach" && parsed.id === "reminder_start") {
+    await handleReminderStart(event, userId, channelAccessToken);
+    return;
+  }
+
+  if (parsed.kind === "coach" && parsed.id === "reminder_snooze") {
+    await handleReminderSnooze(event, userId, channelAccessToken);
+    return;
+  }
+
+  if (parsed.kind === "coach" && parsed.id === "reminder_cannot_do") {
+    await handleReminderCannotDo(event, userId, channelAccessToken);
     return;
   }
 

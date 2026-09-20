@@ -9,6 +9,7 @@ import { lineWebhookHandler } from "./line-webhook";
 import { getUserData, saveUserData } from "./db";
 import { generateCoachResponseStructured, type HistoryItem } from "./coach-ai";
 import { registerLineRichMenuRoutes } from "./line-richmenu";
+import { startReminderEngine } from "./reminder-engine";
 
 async function startServer() {
   const app = express();
@@ -395,6 +396,10 @@ async function startServer() {
       `🚀 FitCoach AI เซิร์ฟเวอร์พร้อมทำงานที่ http://0.0.0.0:${PORT}`
     );
   });
+
+  // Phase 6 — Scheduled LINE Workout Reminder Engine
+  // รันแยกจาก webhook เพื่อให้โค้ชส่งเตือนได้เองตามเวลาที่ผู้ใช้ตั้งไว้
+  void startReminderEngine();
 }
 
 startServer().catch((err) => {
