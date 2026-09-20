@@ -7,7 +7,7 @@ import { authRouter, getMeHandler, requireAuth, type AuthenticatedRequest } from
 import { googleFitRouter } from "./google-fit";
 import { lineWebhookHandler } from "./line-webhook";
 import { getUserData, saveUserData } from "./db";
-import { generateCoachResponse } from "./coach-ai";
+import { generateCoachResponseStructured } from "./coach-ai";
 
 async function startServer() {
   const app = express();
@@ -112,7 +112,7 @@ async function startServer() {
         return res.status(400).json({ error: "ต้องระบุข้อความ message" });
       }
 
-      const reply = await generateCoachResponse(message, {
+      const coachResponse = await generateCoachResponseStructured(message, {
         userProfile,
         workoutPlan,
         fitnessStatus,
@@ -120,7 +120,13 @@ async function startServer() {
         recoveryData,
       });
 
-      return res.json({ reply, timestamp: new Date().toISOString() });
+      // Keep `reply` for backward compatibility while Phase 2 consumers
+      // can render the structured response as cards.
+      return res.json({
+        reply: coachResponse.message,
+        coachResponse,
+        timestamp: new Date().toISOString(),
+      });
     } catch (err) {
       console.error("[API] Coach Chat ล้มเหลว:", err);
       return res.status(500).json({
