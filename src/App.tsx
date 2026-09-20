@@ -40,6 +40,7 @@ import {
   FitnessStatus,
   CoachAccountabilityState,
   ChatMessage,
+  CoachResponse,
   MealItem,
   WeeklyReport,
 } from "./types";
@@ -619,11 +620,13 @@ export default function App() {
 
       if (res.ok) {
         const data = await res.json();
+        const coachResponse = data.coachResponse as CoachResponse | undefined;
         const botReply: ChatMessage = {
           id: `bot-${Date.now()}`,
           sender: "bot",
-          text: data.reply,
+          text: coachResponse?.message || data.reply || "โค้ชยังตอบไม่ได้ในขณะนี้ครับ",
           timestamp: new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }),
+          coachResponse,
           quickReplies: ["เปิดหน้าต่างซ้อม", "คำนวณอาหารวันนี้", "ปรึกษาท่าฝึก"],
         };
         setMessages((prev) => [...prev, botReply]);
