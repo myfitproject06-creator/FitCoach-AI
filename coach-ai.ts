@@ -43,8 +43,8 @@ export interface HistoryItem {
   text: string;
 }
 
-const MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash";
-const FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL || "gemini-3.5-flash-lite";
+const MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash";
+const FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL || "gemini-3.1-flash-lite";
 
 const COACH_RESPONSE_SCHEMA = {
   type: "object",

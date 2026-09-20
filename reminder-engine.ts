@@ -2,7 +2,12 @@
 // Uses Firebase as source of truth and sends deterministic LINE Push Messages.
 import { getUserData, listUserData, saveUserData, type UserData } from "./db";
 import { bangkokToday, executeCoachTool } from "./coach-plan";
-import { buildWorkoutReminderMessages, type LineMessagePayload } from "./line-flex";
+import {
+  buildWorkoutReminderMessages,
+  buildMorningBriefingMessages,
+  buildNightRecapMessages,
+  type LineMessagePayload,
+} from "./line-flex";
 
 const DEFAULT_INTERVAL_MS = 60_000;
 const DEFAULT_OVERDUE_MINUTES = 60;
@@ -19,13 +24,15 @@ interface ReminderState {
   lastReminderAt?: string;
   snoozeUntil?: string;
   overdueReminderKey?: string;
+  lastMorningBriefingDate?: string;
+  lastNightRecapDate?: string;
 }
 
 function lineToken(): string {
   return process.env.LINE_CHANNEL_ACCESS_TOKEN || "";
 }
 
-function nowBangkokParts(now = new Date()): { date: string; minutes: number; hhmm: string } {
+function nowBangkokParts(now = new Date()): { date: string; minutes: number; hhmm: string; hour: number; minute: number } {
   const date = now.toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
   const time = now.toLocaleTimeString("en-GB", {
     timeZone: "Asia/Bangkok",
@@ -34,7 +41,7 @@ function nowBangkokParts(now = new Date()): { date: string; minutes: number; hhm
     hour12: false,
   });
   const [h, m] = time.split(":").map(Number);
-  return { date, minutes: h * 60 + m, hhmm: time };
+  return { date, minutes: h * 60 + m, hhmm: time, hour: h, minute: m };
 }
 
 function parseHHMM(value: unknown): number | null {
@@ -156,6 +163,83 @@ async function sendReminder(user: UserData, mode: "on_time" | "overdue"): Promis
   return true;
 }
 
+export async function sendMorningBriefing(userId: string): Promise<{ ok: boolean; error?: string }> {
+  const user = await getUserData(userId);
+  if (!user) return { ok: false, error: "ไม่พบข้อมูลผู้ใช้" };
+  const workout = workoutForToday(user);
+  const userName = user.profile?.name || "";
+  const isRest = Boolean(workout?.day?.isRestDay);
+  const workoutTitle = workout?.title || (isRest ? "พักผ่อน (Rest Day)" : "ตารางซ้อมประจำวัน");
+  const workoutFocus = workout?.focus || "";
+  const durationMinutes = workout?.durationMinutes || 45;
+  const targetSteps = user.activity?.targetSteps || 8000;
+  const targetCalories = user.nutrition?.targetCalories || 2000;
+
+  const messages = buildMorningBriefingMessages({
+    userName,
+    workoutTitle,
+    workoutFocus,
+    durationMinutes,
+    targetSteps,
+    targetCalories,
+    isRestDay: isRest,
+    appUrl: process.env.APP_URL || "",
+  });
+
+  const sent = await pushLineMessages(userId, messages);
+  if (!sent) return { ok: false, error: "ไม่สามารถส่งข้อความผ่าน LINE Push API ได้ (กรุณาตรวจสอบ Channel Access Token)" };
+
+  const state = getState(user);
+  const today = bangkokToday();
+  await saveUserData(userId, {
+    accountability: {
+      ...state,
+      lastMorningBriefingDate: today,
+    } as any,
+  });
+  console.log(`[Reminder] Sent morning briefing to userId=${userId} date=${today}`);
+  return { ok: true };
+}
+
+export async function sendNightRecap(userId: string): Promise<{ ok: boolean; error?: string }> {
+  const user = await getUserData(userId);
+  if (!user) return { ok: false, error: "ไม่พบข้อมูลผู้ใช้" };
+  const date = bangkokToday();
+  const userName = user.profile?.name || "";
+  const targetCalories = user.nutrition?.targetCalories || 2000;
+  const currentCalories = user.nutrition?.currentCalories || 0;
+  const targetProtein = user.nutrition?.targetProtein || 140;
+  const currentProtein = user.nutrition?.currentProtein || 0;
+  const targetSteps = user.activity?.targetSteps || 8000;
+  const currentSteps = user.activity?.currentSteps || 0;
+  const workoutCompleted = isAlreadyDone(user, date);
+
+  const messages = buildNightRecapMessages({
+    userName,
+    targetCalories,
+    currentCalories,
+    targetProtein,
+    currentProtein,
+    targetSteps,
+    currentSteps,
+    workoutCompleted,
+    recommendedBedtime: "22:30 - 23:00 น.",
+  });
+
+  const sent = await pushLineMessages(userId, messages);
+  if (!sent) return { ok: false, error: "ไม่สามารถส่งข้อความผ่าน LINE Push API ได้ (กรุณาตรวจสอบ Channel Access Token)" };
+
+  const state = getState(user);
+  await saveUserData(userId, {
+    accountability: {
+      ...state,
+      lastNightRecapDate: date,
+    } as any,
+  });
+  console.log(`[Reminder] Sent night recap to userId=${userId} date=${date}`);
+  return { ok: true };
+}
+
 export async function runReminderTick(): Promise<{ scanned: number; sent: number }> {
   const users = await listUserData();
   const now = nowBangkokParts();
@@ -164,10 +248,28 @@ export async function runReminderTick(): Promise<{ scanned: number; sent: number
 
   for (const user of users) {
     try {
+      const state = getState(user);
+
+      // 1. เช็ค Morning Briefing ประจำวัน เวลา 08:00 น.
+      if (now.hour === 8 && now.minute <= 15) {
+        if (state.lastMorningBriefingDate !== now.date) {
+          const res = await sendMorningBriefing(user.userId);
+          if (res.ok) sent++;
+        }
+      }
+
+      // 2. เช็ค Night Recap ประจำวัน เวลา 20:00 น.
+      if (now.hour === 20 && now.minute <= 15) {
+        if (state.lastNightRecapDate !== now.date) {
+          const res = await sendNightRecap(user.userId);
+          if (res.ok) sent++;
+        }
+      }
+
+      // 3. เช็คตารางเตือนการออกกำลังกายตามกำหนดเวลาของผู้ใช้
       const workout = workoutForToday(user);
       if (!workout || workout.day?.isRestDay || isAlreadyDone(user, workout.date)) continue;
 
-      const state = getState(user);
       const snoozeUntil = state.snoozeUntil ? new Date(state.snoozeUntil).getTime() : 0;
       if (snoozeUntil > Date.now()) continue;
       if (snoozeUntil > 0 && snoozeUntil <= Date.now()) {

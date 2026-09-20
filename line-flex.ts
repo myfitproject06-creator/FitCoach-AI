@@ -329,6 +329,227 @@ export function buildWorkoutReminderMessages(options: {
   ];
 }
 
+/**
+ * สรุปสั้นๆ ทุกเช้าเวลา 08:00 น. ผ่าน LINE
+ * เช่น "สวัสดีตอนเช้าครับคุณ สมชาย! วันนี้คุณมีตาราง Upper Body นะครับ เป้าหมายก้าวเดิน 8,000 ก้าว โค้ชพร้อมเสมอ!"
+ */
+export function buildMorningBriefingMessages(options: {
+  userName?: string;
+  workoutTitle?: string;
+  workoutFocus?: string;
+  targetSteps?: number;
+  targetCalories?: number;
+  durationMinutes?: number;
+  isRestDay?: boolean;
+  appUrl?: string;
+} = {}): LineMessagePayload[] {
+  const name = options.userName?.trim() || "คนเก่ง";
+  const isRest = Boolean(options.isRestDay);
+  const workoutTitle = options.workoutTitle || (isRest ? "พักผ่อน (Active Recovery / Rest Day)" : "Workout ประจำวัน");
+  const targetSteps = options.targetSteps || 8000;
+  const targetCalories = options.targetCalories || 2000;
+  const duration = options.durationMinutes || 45;
+
+  const introText = isRest
+    ? `🌅 สวัสดีตอนเช้าครับคุณ ${name}! 🧘‍♂️\n\nวันนี้เป็นวันพักผ่อน (Rest Day) กล้ามเนื้อของคุณกำลังซ่อมแซมและเติบโต เน้นเดินเบาๆ ยืดเหยียด และทานโปรตีนให้เพียงพอครับ\n\n🎯 เป้าหมายก้าวเดินวันนี้: ${targetSteps.toLocaleString()} ก้าว\n🔥 เป้าหมายพลังงาน: ${targetCalories.toLocaleString()} kcal\n\nโค้ชพร้อมซัพพอร์ตตลอดวันครับ! 🌟`
+    : `🌅 สวัสดีตอนเช้าครับคุณ ${name}! FitCoach AI พร้อมลุยกับคุณวันนี้แล้วครับ 🎯\n\nวันนี้คุณมีตาราง ${workoutTitle} นะครับ เป้าหมายก้าวเดิน ${targetSteps.toLocaleString()} ก้าว โค้ชพร้อมเสมอ! 💪`;
+
+  const badges = [
+    isRest ? "พักผ่อนฟื้นฟู" : options.workoutFocus || "Upper Body",
+    `เป้า ${targetSteps.toLocaleString()} ก้าว`,
+    `เป้า ${targetCalories.toLocaleString()} kcal`,
+  ];
+
+  const bubble: LineFlexBubble = {
+    type: "bubble",
+    size: "mega",
+    body: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: COLORS.surface,
+      paddingAll: "xl",
+      spacing: "md",
+      contents: [
+        {
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            text("🌅 MORNING BRIEFING", "xs", "bold", COLORS.green),
+            text("08:00 น.", "xs", "bold", COLORS.muted),
+          ],
+        },
+        text("เริ่มต้นวันใหม่ด้วยพลัง! 🚀", "lg", "bold", COLORS.ink),
+        text(workoutTitle, "xl", "bold", COLORS.green),
+        {
+          type: "box",
+          layout: "horizontal",
+          spacing: "sm",
+          margin: "sm",
+          contents: badges.slice(0, 3).map((b) => pill(b, COLORS.greenSoft, COLORS.green)),
+        },
+        separator(),
+        text(
+          isRest
+            ? "วันพักผ่อนมีความสำคัญไม่แพ้วันฝึก ช่วยให้กล้ามเนื้อฟื้นฟูได้อย่างสมบูรณ์ เติมน้ำและทานอาหารที่มีประโยชน์นะครับ"
+            : `ตารางฝึกใช้เวลาประมาณ ${duration} นาที โค้ชแนะนำเริ่มฝึกในช่วงเวลาที่คุณสะดวก ดื่มน้ำให้เพียงพอก่อนออกกำลังกายครับ`,
+          "sm",
+          "regular",
+          COLORS.muted
+        ),
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: COLORS.surface,
+      paddingAll: "lg",
+      spacing: "sm",
+      contents: [
+        safeAction({ id: "start_workout", label: "เริ่มซ้อมเลย 💪", actionType: "start_workout", style: "primary" }),
+        safeAction({ id: "view_plan", label: "ดูตารางซ้อมวันนี้ 📋", actionType: "view_plan", style: "secondary" }),
+        safeAction({ id: "log_food", label: "บันทึกอาหารเช้า 🥗", actionType: "log_food", style: "secondary" }),
+      ],
+    },
+  };
+
+  return [
+    { type: "text", text: introText },
+    { type: "flex", altText: `🌅 Morning Briefing: วันนี้มีตาราง ${workoutTitle}`, contents: bubble },
+  ];
+}
+
+/**
+ * สรุปตอนค่ำเวลา 20:00 น.
+ * ประเมินว่าวันนี้ขาดแคลอรี่หรือโปรตีนเท่าไหร่ และควรนอนกี่โมง
+ */
+export function buildNightRecapMessages(options: {
+  userName?: string;
+  targetCalories?: number;
+  currentCalories?: number;
+  targetProtein?: number;
+  currentProtein?: number;
+  targetSteps?: number;
+  currentSteps?: number;
+  workoutCompleted?: boolean;
+  targetSleepHours?: string;
+  recommendedBedtime?: string;
+} = {}): LineMessagePayload[] {
+  const name = options.userName?.trim() || "คุณ";
+  const targetCal = options.targetCalories || 2000;
+  const currentCal = options.currentCalories || 0;
+  const calDiff = targetCal - currentCal;
+
+  const targetPro = options.targetProtein || 140;
+  const currentPro = options.currentProtein || 0;
+  const proDiff = targetPro - currentPro;
+
+  const targetSteps = options.targetSteps || 8000;
+  const currentSteps = options.currentSteps || 0;
+  const workoutDone = Boolean(options.workoutCompleted);
+  const bedtime = options.recommendedBedtime || "22:30 - 23:00 น.";
+
+  // สรุปสถานะแคลอรี่
+  let calSummary = "";
+  if (calDiff > 250) {
+    calSummary = `🔥 แคลอรี่: วันนี้ขาดอีกประมาณ ${calDiff.toLocaleString()} kcal (${currentCal.toLocaleString()}/${targetCal.toLocaleString()} kcal) แนะนำเติมคาร์บเชิงซ้อนหรือโปรตีนเบาๆ ก่อนนอน`;
+  } else if (calDiff < -250) {
+    calSummary = `🔥 แคลอรี่: วันนี้ทานเกินเป้าไป ${Math.abs(calDiff).toLocaleString()} kcal (${currentCal.toLocaleString()}/${targetCal.toLocaleString()} kcal) วันพรุ่งนี้เน้นก้าวเดินเพิ่มขึ้นได้ครับ`;
+  } else {
+    calSummary = `🔥 แคลอรี่: ได้ ${currentCal.toLocaleString()}/${targetCal.toLocaleString()} kcal ตรงตามเป้าหมาย ยอดเยี่ยมมากครับ! 🎯`;
+  }
+
+  // สรุปสถานะโปรตีน
+  let proSummary = "";
+  if (proDiff > 20) {
+    proSummary = `🥩 โปรตีน: ยังขาดอีก ${proDiff}g (${currentPro}/${targetPro}g) แนะนำเสริมไข่ต้ม นมถั่วเหลือง หรือเวย์โปรตีนก่อนนอนเพื่อซ่อมแซมกล้ามเนื้อ`;
+  } else {
+    proSummary = `🥩 โปรตีน: บรรลุเป้าหมาย (${currentPro}/${targetPro}g) กล้ามเนื้อพร้อมเติบโตและซ่อมแซมเต็มที่! 💪`;
+  }
+
+  // สรุปการออกกำลังกาย & ก้าวเดิน
+  const workoutSummary = workoutDone
+    ? `✅ การฝึกซ้อม: ทำสำเร็จตามแผนเรียบร้อยแล้ว 🔥`
+    : `⚠️ การฝึกซ้อม: วันนี้ยังไม่ได้บันทึกเสร็จ หากเหนื่อยล้า พักผ่อนให้เต็มที่แล้วลุยต่อวันพรุ่งนี้ครับ`;
+
+  const stepsSummary = `🚶‍♂️ ก้าวเดิน: ${currentSteps.toLocaleString()} / ${targetSteps.toLocaleString()} ก้าว (${Math.round((currentSteps / Math.max(1, targetSteps)) * 100)}%)`;
+
+  const sleepAdvice = `😴 การพักผ่อน: แนะนำเข้านอนเวลา ${bedtime} เพื่อให้ได้การนอนหลับที่มีคุณภาพ ร่างกายจะหลั่ง Growth Hormone ซ่อมแซมกล้ามเนื้อและลดความเครียดสะสมครับ`;
+
+  const fullText = [
+    `🌙 สรุปผลประจำวัน FitCoach Night Recap (20:00 น.)`,
+    `สวัสดีครับคุณ ${name} สรุปภาพรวมร่างกายของคุณวันนี้:`,
+    ``,
+    calSummary,
+    proSummary,
+    stepsSummary,
+    workoutSummary,
+    ``,
+    sleepAdvice,
+  ].join("\n");
+
+  const bubble: LineFlexBubble = {
+    type: "bubble",
+    size: "mega",
+    body: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: COLORS.surface,
+      paddingAll: "xl",
+      spacing: "md",
+      contents: [
+        {
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            text("🌙 NIGHT RECAP", "xs", "bold", COLORS.purple),
+            text("20:00 น.", "xs", "bold", COLORS.muted),
+          ],
+        },
+        text("สรุปผลสุขภาพประจำวัน 📊", "lg", "bold", COLORS.ink),
+        {
+          type: "box",
+          layout: "horizontal",
+          spacing: "sm",
+          margin: "sm",
+          contents: [
+            pill(calDiff > 200 ? `ขาด ${calDiff} kcal` : calDiff < -200 ? `เกิน ${Math.abs(calDiff)} kcal` : "แคลอรี่พอดี", calDiff > 200 ? COLORS.amberSoft : COLORS.greenSoft, calDiff > 200 ? COLORS.amber : COLORS.green),
+            pill(proDiff > 15 ? `ขาดโปรตีน ${proDiff}g` : "โปรตีนครบ", proDiff > 15 ? COLORS.redSoft : COLORS.greenSoft, proDiff > 15 ? COLORS.red : COLORS.green),
+            pill(workoutDone ? "ซ้อมสำเร็จ ✓" : "ยังไม่เสร็จ", workoutDone ? COLORS.greenSoft : COLORS.soft, workoutDone ? COLORS.green : COLORS.muted),
+          ],
+        },
+        separator(),
+        {
+          type: "box",
+          layout: "vertical",
+          spacing: "sm",
+          contents: [
+            text(`• โภชนาการ: ${calSummary.replace("🔥 แคลอรี่: ", "")}`, "xs", "regular", COLORS.ink),
+            text(`• โปรตีน: ${proSummary.replace("🥩 โปรตีน: ", "")}`, "xs", "regular", COLORS.ink),
+            text(`• ก้าวเดิน: ${currentSteps.toLocaleString()} / ${targetSteps.toLocaleString()} ก้าว`, "xs", "regular", COLORS.muted),
+            text(`• นอนหลับ: แนะนำเข้านอน ${bedtime}`, "xs", "bold", COLORS.purple),
+          ],
+        },
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: COLORS.surface,
+      paddingAll: "lg",
+      spacing: "sm",
+      contents: [
+        safeAction({ id: "log_food", label: "บันทึกอาหารเพิ่มเติม 🥗", actionType: "log_food", style: "primary" }),
+        safeAction({ id: "view_plan", label: "ดูภาพรวมวันนี้ 📱", actionType: "view_plan", style: "secondary" }),
+      ],
+    },
+  };
+
+  return [
+    { type: "text", text: fullText },
+    { type: "flex", altText: `🌙 Night Recap 20:00 น. — สรุปแคลอรี่ โปรตีน และคำแนะนำการนอน`, contents: bubble },
+  ];
+}
+
 export function buildLineReplyMessages(response: CoachResponse): LineMessagePayload[] {
   if (response.type === "chat" && !response.actions?.length) return [{ type: "text", text: response.message.slice(0, 5000) }];
   const messages: LineMessagePayload[] = [];

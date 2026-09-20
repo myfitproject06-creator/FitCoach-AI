@@ -815,6 +815,7 @@ export default function App() {
             onLogout={handleLogout}
             onOpenOnboarding={() => setIsOnboardingOpen(true)}
             onOpenLine={() => setIsLineBotOpen(true)}
+            onOpenGoogleHealth={() => setIsGoogleHealthOpen(true)}
           />
         )}
       </main>

@@ -88,11 +88,19 @@ export async function requestGoogleFitAuth(): Promise<string> {
 
     try {
       const client = google.accounts.oauth2.initTokenClient({
-        client_id: GOOGLE_FIT_CLIENT_ID,
+        client_id: activeGoogleClientId || GOOGLE_FIT_CLIENT_ID,
         scope: GOOGLE_FIT_SCOPES,
         callback: (response: any) => {
           if (response.error) {
-            reject(new Error(response.error_description || response.error));
+            let userFriendlyMsg = response.error_description || response.error;
+            if (response.error === "origin_mismatch" || String(userFriendlyMsg).includes("origin")) {
+              userFriendlyMsg = `โดเมนปัจจุบัน (${window.location.origin}) ยังไม่ได้เพิ่มใน Authorized JavaScript Origins ของ Google Cloud Project`;
+            } else if (response.error === "popup_closed_by_user") {
+              userFriendlyMsg = "หน้าต่างเข้าสู่ระบบ Google ถูกปิดก่อนทำรายการเสร็จสิ้น";
+            } else if (response.error === "access_denied") {
+              userFriendlyMsg = "ผู้ใช้ปฏิเสธการอนุญาตเข้าถึงข้อมูลสุขภาพ Google Fit";
+            }
+            reject(new Error(userFriendlyMsg));
             return;
           }
           if (response.access_token) {
@@ -400,3 +408,18 @@ export async function fetchGoogleFitHealthData(): Promise<GoogleHealthData> {
     syncedAt: result.syncedAt,
   };
 }
+
+export async function syncHealthToServer(data: GoogleHealthData): Promise<boolean> {
+  try {
+    const res = await fetch("/api/health/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn("[Health Sync Server] Warning:", err);
+    return false;
+  }
+}
+

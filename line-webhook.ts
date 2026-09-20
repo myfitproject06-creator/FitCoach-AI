@@ -175,8 +175,8 @@ async function handleCompleteWorkout(
   const displayText = "กดเสร็จแล้ว — บันทึก Workout วันนี้";
   const updatedMessages: ChatMessage[] = [
     ...previous,
-    { id: `u-${now}`, sender: "user", text: displayText, timestamp: new Date(now).toISOString() },
-    { id: `c-${now}`, sender: "coach", text: "บันทึก Workout สำเร็จแล้วครับ!", timestamp: new Date().toISOString() },
+    { id: `u-${now}`, sender: "user" as const, text: displayText, timestamp: new Date(now).toISOString() },
+    { id: `c-${now}`, sender: "coach" as const, text: "บันทึก Workout สำเร็จแล้วครับ!", timestamp: new Date().toISOString() },
   ].slice(-40);
   await saveUserData(userId, { messages: updatedMessages });
 
@@ -312,8 +312,8 @@ async function handlePostbackAction(event: LineEvent, userId: string, channelAcc
 
   const updatedMessages: ChatMessage[] = [
     ...previous,
-    { id: `u-${now}`, sender: "user", text: displayText, timestamp: new Date(now).toISOString() },
-    { id: `c-${now}`, sender: "coach", text: response.message, timestamp: new Date().toISOString(), coachResponse: response },
+    { id: `u-${now}`, sender: "user" as const, text: displayText, timestamp: new Date(now).toISOString() },
+    { id: `c-${now}`, sender: "coach" as const, text: response.message, timestamp: new Date().toISOString(), coachResponse: response },
   ].slice(-40);
 
   await saveUserData(userId, { messages: updatedMessages });
@@ -387,8 +387,8 @@ export async function lineWebhookHandler(req: Request, res: Response) {
       const now = Date.now();
       const updatedMessages: ChatMessage[] = [
         ...previous,
-        { id: `u-${now}`, sender: "user", text: userText, timestamp: new Date(now).toISOString() },
-        { id: `c-${now}`, sender: "coach", text: response.message, timestamp: new Date().toISOString(), coachResponse: response },
+        { id: `u-${now}`, sender: "user" as const, text: userText, timestamp: new Date(now).toISOString() },
+        { id: `c-${now}`, sender: "coach" as const, text: response.message, timestamp: new Date().toISOString(), coachResponse: response },
       ].slice(-40);
       await saveUserData(userId, { messages: updatedMessages });
 

@@ -9,7 +9,7 @@ import { lineWebhookHandler } from "./line-webhook";
 import { getUserData, saveUserData } from "./db";
 import { generateCoachResponseStructured, type HistoryItem } from "./coach-ai";
 import { registerLineRichMenuRoutes } from "./line-richmenu";
-import { startReminderEngine } from "./reminder-engine";
+import { startReminderEngine, sendMorningBriefing, sendNightRecap } from "./reminder-engine";
 
 async function startServer() {
   const app = express();
@@ -144,6 +144,111 @@ async function startServer() {
       }
     }
   );
+
+  // Helper เพื่อดึง userId จาก signed session หรือ request
+  const getSessionUserId = (req: any): string | null => {
+    const rawSession = req.signedCookies?.fitcoach_session;
+    if (rawSession) {
+      try {
+        const sessionUser = typeof rawSession === "string" ? JSON.parse(rawSession) : rawSession;
+        if (sessionUser?.userId) return sessionUser.userId;
+      } catch {}
+    }
+    if (req.user?.userId) return req.user.userId;
+    return null;
+  };
+
+  // ----------------------------------------------------
+  // Proactive LINE Coaching: Morning Briefing & Night Recap
+  // ----------------------------------------------------
+
+  app.post("/api/coach/send-morning-briefing", async (req, res) => {
+    try {
+      const userId = getSessionUserId(req) || req.body?.userId;
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          error: "ไม่พบบัญชี LINE ของคุณ กรุณาเข้าสู่ระบบผ่าน LINE ก่อนทดสอบส่งข้อความ",
+        });
+      }
+      const result = await sendMorningBriefing(userId);
+      return res.json({ success: result.ok, error: result.error });
+    } catch (err: any) {
+      console.error("[API] send-morning-briefing error:", err);
+      return res.status(500).json({ success: false, error: err?.message || "ส่งข้อความไม่สำเร็จ" });
+    }
+  });
+
+  app.post("/api/coach/send-night-recap", async (req, res) => {
+    try {
+      const userId = getSessionUserId(req) || req.body?.userId;
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          error: "ไม่พบบัญชี LINE ของคุณ กรุณาเข้าสู่ระบบผ่าน LINE ก่อนทดสอบส่งข้อความ",
+        });
+      }
+      const result = await sendNightRecap(userId);
+      return res.json({ success: result.ok, error: result.error });
+    } catch (err: any) {
+      console.error("[API] send-night-recap error:", err);
+      return res.status(500).json({ success: false, error: err?.message || "ส่งข้อความไม่สำเร็จ" });
+    }
+  });
+
+  // ----------------------------------------------------
+  // Google Health / Smartwatch Data Sync
+  // ----------------------------------------------------
+
+  app.post("/api/health/sync", async (req, res) => {
+    try {
+      const userId = getSessionUserId(req) || req.body?.userId;
+      const {
+        steps,
+        caloriesBurned,
+        distanceKm,
+        activeMinutes,
+        sleepHours,
+        sleepMinutes,
+        sleepStart,
+        sleepEnd,
+        syncedAt,
+      } = req.body || {};
+
+      if (userId) {
+        const existing = await getUserData(userId);
+        const updatedActivity = {
+          ...(existing?.activity || {}),
+          currentSteps: Number(steps) || 0,
+          caloriesExpended: Number(caloriesBurned) || 0,
+          distanceKm: Number(distanceKm) || 0,
+          activeMinutes: Number(activeMinutes) || 0,
+          isFromGoogleHealth: true,
+          lastSyncedAt: syncedAt || new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }),
+        };
+
+        const updatedRecovery = {
+          ...(existing?.recovery || {}),
+          ...(sleepHours != null ? { sleepHours: Number(sleepHours) } : {}),
+          ...(sleepMinutes != null ? { sleepMinutes: Number(sleepMinutes) } : {}),
+          ...(sleepStart ? { sleepStart } : {}),
+          ...(sleepEnd ? { sleepEnd } : {}),
+          isFromGoogleHealth: true,
+          lastSyncedAt: syncedAt || new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }),
+        };
+
+        await saveUserData(userId, {
+          activity: updatedActivity as any,
+          recovery: updatedRecovery as any,
+        });
+      }
+
+      return res.json({ success: true, message: "ซิงค์ข้อมูลสุขภาพเข้าระบบเรียบร้อยแล้ว" });
+    } catch (err: any) {
+      console.error("[Health Sync] Error:", err);
+      return res.status(500).json({ success: false, error: err?.message || "ซิงค์ข้อมูลไม่สำเร็จ" });
+    }
+  });
 
   // ----------------------------------------------------
   // AI Coach Chat
@@ -318,14 +423,14 @@ async function startServer() {
 
           const userMessageRecord = {
             id: `user-${Date.now()}`,
-            sender: "user",
+            sender: "user" as const,
             text: message,
             timestamp: now,
           };
 
           const botMessageRecord = {
             id: `bot-${Date.now()}`,
-            sender: "bot",
+            sender: "bot" as const,
             text: coachResponse.message,
             timestamp: now,
             coachResponse,

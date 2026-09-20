@@ -3,6 +3,7 @@ import { Router, Request, Response } from "express";
 import crypto from "crypto";
 import { requireAuth, AuthenticatedRequest } from "./auth-line";
 import { getUserData, saveUserData } from "./db";
+import type { ActivityData, RecoveryData } from "./src/types";
 
 export const googleFitRouter = Router();
 
@@ -175,20 +176,22 @@ googleFitRouter.get("/google/callback", async (req: Request, res: Response) => {
     // ถ้ามี userId ของ LINE ใน session ให้บันทึกข้อมูลเข้าฐานข้อมูลของผู้ใช้คนนั้นทันที
     if (userId) {
       const existing = await getUserData(userId);
-      const updatedActivity = {
-        ...(existing.activity || {}),
-        currentSteps: healthStats.steps || existing.activity?.currentSteps || 0,
-        distanceKm: healthStats.distanceKm || existing.activity?.distanceKm || 0,
-        activeMinutes: healthStats.activeMinutes || existing.activity?.activeMinutes || 0,
-        caloriesExpended: healthStats.calories || existing.activity?.caloriesExpended || 0,
+      const updatedActivity: ActivityData = {
+        targetSteps: existing?.activity?.targetSteps ?? 10000,
+        activeMinutes: healthStats.activeMinutes || existing?.activity?.activeMinutes || 0,
+        distanceKm: healthStats.distanceKm || existing?.activity?.distanceKm || 0,
+        ...(existing?.activity || {}),
+        currentSteps: healthStats.steps || existing?.activity?.currentSteps || 0,
+        caloriesExpended: healthStats.calories || existing?.activity?.caloriesExpended || 0,
         isFromGoogleHealth: true,
         lastSyncedAt: new Date().toISOString(),
       };
 
-      const updatedRecovery = {
-        ...(existing.recovery || {}),
-        sleepHours: healthStats.sleepHours || existing.recovery?.sleepHours || 0,
-        sleepMinutes: healthStats.sleepMinutes || existing.recovery?.sleepMinutes || 0,
+      const updatedRecovery: RecoveryData = {
+        quality: existing?.recovery?.quality ?? "ดี",
+        sleepHours: healthStats.sleepHours || existing?.recovery?.sleepHours || 0,
+        sleepMinutes: healthStats.sleepMinutes || existing?.recovery?.sleepMinutes || 0,
+        ...(existing?.recovery || {}),
         isFromGoogleHealth: true,
         lastSyncedAt: new Date().toISOString(),
       };
@@ -290,20 +293,22 @@ googleFitRouter.post("/api/googlefit/sync", async (req: Request, res: Response) 
 
     if (userId) {
       const existing = await getUserData(userId);
-      const updatedActivity = {
-        ...(existing.activity || {}),
-        currentSteps: healthStats.steps || existing.activity?.currentSteps || 0,
-        distanceKm: healthStats.distanceKm || existing.activity?.distanceKm || 0,
-        activeMinutes: healthStats.activeMinutes || existing.activity?.activeMinutes || 0,
-        caloriesExpended: healthStats.calories || existing.activity?.caloriesExpended || 0,
+      const updatedActivity: ActivityData = {
+        targetSteps: existing?.activity?.targetSteps ?? 10000,
+        activeMinutes: healthStats.activeMinutes || existing?.activity?.activeMinutes || 0,
+        distanceKm: healthStats.distanceKm || existing?.activity?.distanceKm || 0,
+        ...(existing?.activity || {}),
+        currentSteps: healthStats.steps || existing?.activity?.currentSteps || 0,
+        caloriesExpended: healthStats.calories || existing?.activity?.caloriesExpended || 0,
         isFromGoogleHealth: true,
         lastSyncedAt: new Date().toISOString(),
       };
 
-      const updatedRecovery = {
-        ...(existing.recovery || {}),
-        sleepHours: healthStats.sleepHours || existing.recovery?.sleepHours || 0,
-        sleepMinutes: healthStats.sleepMinutes || existing.recovery?.sleepMinutes || 0,
+      const updatedRecovery: RecoveryData = {
+        quality: existing?.recovery?.quality ?? "ดี",
+        sleepHours: healthStats.sleepHours || existing?.recovery?.sleepHours || 0,
+        sleepMinutes: healthStats.sleepMinutes || existing?.recovery?.sleepMinutes || 0,
+        ...(existing?.recovery || {}),
         isFromGoogleHealth: true,
         lastSyncedAt: new Date().toISOString(),
       };
