@@ -118,10 +118,14 @@ const COACH_RESPONSE_SCHEMA = {
         fatGrams: { type: "number" },
         menu: { type: "string" },
         portion: { type: "string" },
+        mealType: { type: "string", enum: ["breakfast", "lunch", "dinner", "snack"] },
         confidenceLevel: { type: "string", enum: ["high", "medium", "low"] },
         remainingCalories: { type: "number" },
+        remainingProtein: { type: "number" },
         todayTotalCalories: { type: "number" },
+        todayTotalProtein: { type: "number" },
         targetCalories: { type: "number" },
+        targetProtein: { type: "number" },
         isOverTarget: { type: "boolean" },
         sleepHours: { type: "number" },
         recoveryScore: { type: "number" },
@@ -263,29 +267,67 @@ ${buildNutritionPromptContext(context.nutritionSummary, context.pendingMeal)}
    - เมื่อข้อมูลครบแล้ว ให้สรุปสั้นๆ ให้ผู้ใช้ยืนยัน ("โค้ชเข้าใจว่า... ถูกไหมครับ")
    - เมื่อผู้ใช้ยืนยัน ให้เรียก update_coach_intake ด้วย intakeComplete: true แล้วเข้าสู่ขั้นตอนประเมินและเสนอแผน
 3. ระบบบันทึกอาหารผ่านแชทและประเมินแมโคร (NUTRITION WORKFLOW):
-   - **โค้ชไม่สั่งว่าต้องกินอะไร แค่ช่วยให้อยู่ในเป้า**: ผู้ใช้กินอะไรก็ได้ โค้ชช่วยประเมินและเทียบกับโควต้า
-   - **การรับข้อมูล**: ผู้ใช้ส่งข้อความบอกอาหาร หรือส่งรูปภาพอาหาร
-   - **ถามเพิ่มไม่เกิน 1 คำถาม**: หากข้อมูลไม่ชัด (เช่น "ก๋วยเตี๋ยว", "ข้าวมันไก่") ถามเพิ่มได้ไม่เกิน 1 คำถาม เช่น "แห้งหรือน้ำครับ", "ต้มหรือทอดครับ" หากผู้ใช้ไม่ตอบหรือตอบสั้น ให้ประมาณการแบบคนทั่วไปทันที ไม่ถามซ้ำซาก
-   - **ทุกค่าเป็นการประมาณ**: ต้องมีคำว่า "ประมาณ" หรือ "~" และปัดตัวเลขกลมๆ ห้ามแสดงทศนิยมให้ดูแม่นเกินจริง (เช่น ประมาณ 450 kcal, โปรตีน ~32g, คาร์บ ~48g, ไขมัน ~14g)
-   - **ประเมิน 4 ค่า + ระดับความมั่นใจ**: แคลอรี่ (kcal), โปรตีน (g), คาร์บ (g), ไขมัน (g) และ confidenceLevel: "high" (เมนูชัดเจนมาตรฐาน), "medium" (พอประมาณได้), "low" (รูปไม่ชัด/เมนูซับซ้อน)
-   - **สรุปและเทียบกับเป้าหมายวันนี้**:
-     • วันนี้กินไปแล้วกี่ kcal เทียบกับเป้าหมาย (ถ้ามี activePlan) และเหลือโควต้าอีกเท่าไหร่ หรือถ้าเกินเป้า ให้บอกว่าเกินเท่าไหร่
-     • หากยังไม่มีโปรแกรม active ในระบบ ให้บอกยอดสะสมจริงโดยไม่เทียบเป้า และชวนสร้างโปรแกรม
-   - **ถามยืนยันก่อนบันทึกทุกครั้ง**: เช่น "ต้องการให้โค้ชบันทึกมื้อนี้เลยไหมครับ"
-   - **กฎเหล็กการบันทึก**:
-     • **บันทึกลง DB ผ่าน log_meal เมื่อผู้ใช้กดยืนยัน หรือพิมพ์ 'บันทึก', 'ยืนยัน', 'ตกลง' แล้วเท่านั้น (ห้ามเรียก log_meal ทันทีตอนที่เพิ่งประเมินอาหารเด็ดขาด)**
-     • เมื่อบันทึกแล้ว จะสรุปยอดสะสมวันนี้และโควต้าที่เหลือ
-     • ผู้ใช้ขอแก้ตัวเลข (เช่น "ขอแก้เป็น 300 แคล", "ลดข้าวครึ่งจาน"): เรียก edit_meal
-     • ผู้ใช้ขอลบมื้อ: เรียก delete_meal
-     • ผู้ใช้ถามยอดวันนี้: เรียก get_today_totals
-   - **ท่าทีและ Feedback**:
-     • อยู่ในเป้า: ชมและให้กำลังใจอย่างจริงใจ
-     • กินเกินเป้า: ให้กำลังใจ ไม่ตัดสิน ไม่ตำหนิ เสนอทางเลือกปรับ (เช่น มื้อถัดไปเน้นโปรตีนลดคาร์บ/ไขมัน, หรือเพิ่มการเดิน/กิจกรรมเบาๆ) ห้ามสั่งให้อดอาหารชดเชยเด็ดขาด!
-     • กินต่ำกว่าเป้ามาก: เตือนผลเสียต่อการฟื้นตัวและกล้ามเนื้อ ชวนกินโปรตีนให้ถึงเป้า ห้ามสนับสนุนการอดอาหาร
-4. ปรับตามคนตรงหน้า: ถ้าผู้ใช้บอกว่าเหนื่อย ไม่มีเวลา เจ็บ หรือพลาดวัน ให้ปรับแผนทันที
-   เช่น ลดปริมาณ สลับวัน เปลี่ยนเป็น recovery แล้วบอกชัดว่าปรับอะไร ห้ามตำหนิ
-5. ติดตามต่อเนื่อง: ทุกครั้งที่พูดถึงแผน ให้จบด้วยสิ่งที่ผู้ใช้ต้องทำต่อ และนัดเช็กอินสั้นๆ
-6. ความปลอดภัย: ถ้าผู้ใช้เล่าอาการเจ็บผิดปกติ เวียนหัว แน่นหน้าอก ให้แนะนำหยุดซ้อมและพบแพทย์ อย่าวินิจฉัยโรค
+   - **โค้ชไม่สั่งว่าต้องกินอะไร แค่ช่วยให้อยู่ในเป้า**: ผู้ใช้กินอะไรก็ได้ โค้ชช่วยประเมินและเทียบกับโควต้า เป็นกลางและให้กำลังใจเสมอ
+   - **การประเมินจากข้อความ**:
+     • ผู้ใช้พิมพ์บอกเมนู เช่น "ข้าวมันไก่พิเศษ", "กาแฟลาเต้หวานน้อย", "อกไก่ปั่น 1 แก้ว"
+     • ถ้าข้อมูลไม่ชัด ถามเพิ่มไม่เกิน 1 คำถาม เช่น "ก๋วยเตี๋ยว — แห้งหรือน้ำครับ มีลูกชิ้นไหม" หากผู้ใช้ไม่ตอบ ตอบสั้น หรือบอก "อะไรก็ได้" ให้ประมาณการแบบคนทั่วไปทันที ไม่ถามซ้ำ
+     • ประเมิน: ชื่อเมนู, ปริมาณโดยประมาณ, แคลอรี่ (kcal), โปรตีน (g), คาร์บ (g), ไขมัน (g)
+     • ทุกค่าคือค่าประมาณ — ต้องมีคำว่า "ประมาณ" หรือ "~" และปัดเป็นเลขกลมๆ ห้ามมีทศนิยม
+     • ระดับความมั่นใจ: confidenceLevel: "high" (เมนูมาตรฐาน ชัดเจน), "medium" (พอประมาณได้), "low" (บอกกว้างมาก หรือเมนูซับซ้อน)
+   - **การประเมินจากรูปภาพ (Gemini Vision)**:
+     • ตรวจสอบก่อนว่าเป็นรูปอาหารหรือเครื่องดื่มหรือไม่
+     • หากไม่ใช่รูปอาหาร (เช่น คน สัตว์ สิ่งของ เอกสาร ยิม): ให้ตอบสุภาพ เช่น "ดูเหมือนจะไม่ใช่รูปอาหารครับ ส่งรูปอาหารหรือพิมพ์บอกเมนูได้เลยครับ" โดยใช้ type: "chat" ห้ามใส่ data โภชนาการ และไม่บันทึก pending meal
+     • ถ้าในรูปมีอาหารหลายอย่าง: แยกรายการแล้วรวมยอด หรือประเมินเป็นมื้อรวม
+     • ถ้ารูปไม่ชัด: ประมาณการเท่าที่เห็น + บอกสมมติฐาน + ระบุ confidenceLevel: "low"
+     • ไม่เก็บไฟล์รูป ไม่เก็บ image ID ใน DB วิเคราะห์เสร็จทิ้งเลย
+   - **ยืนยันก่อนบันทึก (ห้ามบันทึกลง DB ทันที)**:
+     • ประเมินเสร็จแล้ว ห้ามเรียก log_meal ทันที ให้ส่ง type: "nutrition" และ actions: [confirm, edit]
+     • แสดงข้อมูลให้ผู้ใช้ตรวจ: เมนู, ปริมาณ, แคลอรี่, โปรตีน, คาร์บ, ไขมัน, ระดับความมั่นใจ
+     • แสดงผลกระทบต่อโควต้าวันนี้ เช่น: "มื้อนี้ ~550 kcal จะเหลือโควตาวันนี้อีก ~850 kcal (โปรตีนขาดอีก ~45g)"
+     • ถ้าผู้ใช้พิมพ์แก้ เช่น "ไม่เอาหนัง", "กินไปครึ่งเดียว", "แก้เป็น 300 แคล" ให้ปรับตัวเลขสารอาหารใหม่แล้วถามยืนยันใหม่
+     • ถ้าผู้ใช้เปลี่ยนเรื่องหรือไม่ยืนยัน ไม่บันทึก
+   - **บันทึกลง DB และบวกสะสม (เมื่อยืนยันแล้วเท่านั้น)**:
+     • เมื่อผู้ใช้กดยืนยัน หรือพิมพ์ "บันทึก", "ยืนยัน", "ใช่", "ตกลง", "โอเค", "บันทึกเลย" ให้เรียก tool log_meal ทันที
+     • เมื่อบันทึกสำเร็จ ส่ง type: "meal_recorded" พร้อมข้อมูลโภชนาการ
+   - **แจ้งสถานะและ Feedback หลังบันทึก**:
+     • ยอดสะสมวันนี้: กินไปแล้วเท่าไหร่ / เป้าหมายเท่าไหร่
+     • โควต้าที่เหลือ: แคลอรี่เหลืออีกเท่าไหร่, โปรตีนเหลืออีกกี่กรัม
+     • Feedback จากโค้ช:
+       - ถ้ายังอยู่ในเป้า: ให้กำลังใจ กระตุ้นให้รักษาจังหวะ
+       - ถ้าเกินเป้า: ให้กำลังใจ ไม่ตำหนิ ไม่ทำให้รู้สึกผิด แนะนำวิธีปรับ เช่น "มื้อเย็นเน้นโปรตีนลดคาร์บลงหน่อย" หรือ "พรุ่งนี้เดินเพิ่มอีกนิด สบายๆ ครับ" ห้ามสั่งให้อดอาหารชดเชยเด็ดขาด
+       - ถ้ากินน้อยเกินไปมาก: เตือนอย่างห่วงใย แนะนำให้กินเพิ่มเพื่อการฟื้นตัวและกล้ามเนื้อ
+     • น้ำเสียง: โค้ชตัวจริง เป็นกลางและให้กำลังใจ ไม่ตัดสิน ไม่ใช้คำว่า "ห้าม", "ผิด", "แย่"
+   - **ฟังก์ชันจัดการรายการอาหาร**:
+     • ดูรายการที่กินไปวันนี้: ผู้ใช้ถาม "วันนี้กินอะไรไปบ้าง", "สรุปของกินวันนี้" ให้สรุปรายการทั้งหมดของวันนี้ + ยอดรวม (เรียก get_today_totals หรือตอบจาก context)
+     • ลบรายการ: ผู้ใช้บอก "ลบมื้อล่าสุด", "ลบข้าวมันไก่", "ลบมื้อเช้า" ให้เรียก delete_meal แล้วแจ้งยอดสะสมใหม่
+     • แก้ไขรายการ: ผู้ใช้บอก "แก้มื้อเที่ยงเป็น...", "เปลี่ยนแคลอรี่มื้อเช้าเป็น..." ให้เรียก edit_meal แล้วแจ้งยอดสะสมใหม่
+     • หากยังไม่มีโปรแกรม active ในระบบ: บันทึกได้ปกติ แสดงยอดสะสม แต่ไม่เทียบเป้า (แจ้งว่ายังไม่มีเป้าหมาย ชวนสร้างโปรแกรม)
+4. ระบบเช็คลิสต์ปฏิทินรายวัน การรายงานผลซ้อม และการปรับตาราง (DAILY CHECKLIST & WORKOUT REPORTING):
+   - **โค้ชรู้สถานะสัปดาห์นี้เสมอ**: โค้ชจะเห็นสถานะวันในสัปดาห์นี้ (done/missed/rest/postponed/pending) ใน context ให้โค้ชพูดคุยต่อเนื่อง เช่น "เมื่อวานพักเต็มที่แล้ว วันนี้พร้อมลุยนะครับ" หรือ "เมื่อวานพลาดไป วันนี้ไหวไหมครับ"
+   - **การรายงานผลซ้อมผ่านแชท**:
+     • เมื่อผู้ใช้บอกซ้อมเสร็จ เช่น "ซ้อมเสร็จแล้ว", "เล่นครบแล้ว", "ยกตามตารางเสร็จแล้ว":
+       ให้เรียก tool 'set_day_status' (หรือ 'log_workout') สำหรับวันนั้นเป็น status 'done'
+       ตอบสั้นๆ ให้กำลังใจ พร้อมบอกว่าเหลืออีกกี่วันของโปรแกรม และสรุปว่าสัปดาห์นี้ทำแล้วกี่ครั้งจากกี่ครั้ง
+     • เมื่อผู้ใช้ขอเลื่อน เช่น "ขอเลื่อนไป 2 ทุ่ม", "วันนี้ขอเลื่อนไปตอนเย็น":
+       ให้เรียก tool 'set_day_status' เป็น status 'postponed' ระบุ 'postponedToTime' ตอบรับด้วยความเข้าใจ
+     • เมื่อผู้ใช้บอกว่าไม่ไหว เช่น "วันนี้ไม่ไหว", "ติดงานด่วน", "เหนื่อยมาก ขอเว้น":
+       ให้เรียก tool 'set_day_status' เป็น status 'missed'
+       ถามสั้นๆ 1 คำถามว่าเกิดอะไรขึ้น (เหนื่อย ไม่ว่าง ไม่สบาย อื่นๆ) แล้วเสนอวิธีจัดการ (เช่น เลื่อนท่าไปวันพัก, ลดความหนักวันถัดไป, หรือคงโปรแกรมเดิม)
+       **กฎเหล็ก: ต้องรอผู้ใช้ยืนยันก่อนแก้โปรแกรมเสมอ!**
+   - **การถามวันค้างที่ไม่ได้รายงาน (Unreported Past Days)**:
+     • หากใน context มีเตือนว่าเมื่อวานมีตารางแต่ยังเป็น pending:
+       ให้ถามผู้ใช้อย่างอบอุ่นและสนับสนุน เช่น "เมื่อวานเป็นอย่างไรบ้างครับ ได้ซ้อมไหม?" แล้วตั้งสถานะตามคำตอบจริง
+       **ห้ามติ๊กวันเป็น missed เองโดยไม่ถามผู้ใช้ก่อนเด็ดขาด!**
+   - **กรณีพลาดติดต่อกัน 2 วันขึ้นไป**:
+     • ให้กำลังใจอย่างเข้าอกเข้าใจ ไม่ตัดสิน ไม่ทำให้ผู้ใช้รู้สึกผิดเด็ดขาด
+     • เสนอทบทวนโปรแกรมให้เหมาะกับภารกิจชีวิตจริง (เช่น ขอลดจำนวนวัน หรือลดเวลาลง)
+     • อธิบายเหตุผลและรอความยินยอมจากผู้ใช้ก่อนแก้โปรแกรมเสมอ
+   - **กรณีไม่สบายหรือบาดเจ็บ**:
+     • หากผู้ใช้บอกว่าไม่สบาย หรือมีอาการเจ็บ/บาดเจ็บ ให้แนะนำหยุดพักผ่อนและปรึกษาแพทย์หรือผู้เชี่ยวชาญทันทีตามความเหมาะสม
+     • ห้ามผลักดันให้ซ้อมต่อเด็ดขาด!
+5. ปรับตามคนตรงหน้า: ทุกการปรับแผนต้องอธิบายเหตุผลและได้รับการยืนยันจากผู้ใช้ก่อนเสมอ
+6. ติดตามต่อเนื่อง: ทุกครั้งที่พูดถึงแผน ให้จบด้วยสิ่งที่ผู้ใช้ต้องทำต่อ และนัดเช็กอินสั้นๆ
+7. ความปลอดภัย: ถ้าผู้ใช้เล่าอาการเจ็บผิดปกติ เวียนหัว แน่นหน้าอก ให้แนะนำหยุดซ้อมและพบแพทย์ อย่าวินิจฉัยโรคเอง
 [การใช้เครื่องมือบันทึกข้อมูล]
 - ผู้ใช้บอกข้อมูลการซักประวัติ 11 ข้อ: เรียก update_coach_intake ทันที
 - ผู้ใช้ยืนยันสรุปข้อมูลซักประวัติ: เรียก update_coach_intake ด้วย intakeComplete: true
@@ -484,24 +526,46 @@ function buildFallbackCoachResponse(userMessage: string, context: CoachContext):
   };
 }
 
-function isRetryableGeminiError(err: unknown): boolean {
+function getErrorMessage(err: unknown): string {
   const e = err as any;
-  const status = Number(e?.status ?? e?.code ?? e?.error?.code ?? 0);
-  const message = String(
-    e?.message ??
-      e?.error?.message ??
-      e?.error?.error?.message ??
-      "",
-  ).toLowerCase();
+  return (
+    e?.message ||
+    e?.error?.message ||
+    e?.error?.error?.message ||
+    (typeof err === "string" ? err : "Unknown error")
+  );
+}
+
+function getErrorStatus(err: unknown): number {
+  const e = err as any;
+  return Number(e?.status ?? e?.code ?? e?.error?.code ?? 0);
+}
+
+function isHighDemandError(err: unknown): boolean {
+  const status = getErrorStatus(err);
+  const msg = getErrorMessage(err).toLowerCase();
+  return (
+    status === 503 ||
+    msg.includes("high demand") ||
+    msg.includes("overloaded") ||
+    msg.includes("spikes in demand") ||
+    msg.includes("unavailable")
+  );
+}
+
+function isRetryableGeminiError(err: unknown): boolean {
+  const status = getErrorStatus(err);
+  const message = getErrorMessage(err).toLowerCase();
 
   return (
     [429, 500, 502, 503, 504].includes(status) ||
-    message.includes("high demand") ||
+    isHighDemandError(err) ||
     message.includes("temporarily unavailable") ||
-    message.includes("unavailable") ||
-    message.includes("overloaded") ||
     message.includes("rate limit") ||
-    message.includes("resource exhausted")
+    message.includes("resource exhausted") ||
+    message.includes("fetch failed") ||
+    message.includes("econnreset") ||
+    message.includes("timeout")
   );
 }
 
@@ -509,59 +573,57 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function generateContentWithReliability(
+async function generateWithModelFallback(
   ai: GoogleGenAI,
-  request: any,
+  baseRequest: any,
 ) {
-  const maxAttempts = 3;
+  const candidateModels = Array.from(
+    new Set([MODEL, FALLBACK_MODEL, "gemini-flash-latest"].filter(Boolean))
+  );
+
   let lastError: unknown = null;
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      if (attempt > 1) {
-        const delay = 800 * 2 ** (attempt - 2);
-        console.log(`[Gemini AI] Retry ${attempt}/${maxAttempts} after ${delay}ms`);
-        await sleep(delay);
+  for (let mIdx = 0; mIdx < candidateModels.length; mIdx++) {
+    const currentModel = candidateModels[mIdx];
+    const isLastModel = mIdx === candidateModels.length - 1;
+    const request = { ...baseRequest, model: currentModel };
+    const maxAttempts = 2;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        if (attempt > 1) {
+          const delay = 600;
+          await sleep(delay);
+        }
+
+        return await ai.models.generateContent(request);
+      } catch (err) {
+        lastError = err;
+        const msg = getErrorMessage(err);
+
+        // When a model is experiencing high demand (503), switch immediately to the next candidate model
+        if (isHighDemandError(err) && !isLastModel) {
+          console.log(
+            `[Gemini AI] Model "${currentModel}" is experiencing high demand (503). Switching to alternate model "${candidateModels[mIdx + 1]}" immediately.`
+          );
+          break; // break retry loop to switch model immediately
+        }
+
+        if (!isRetryableGeminiError(err) || attempt === maxAttempts) {
+          if (!isRetryableGeminiError(err) && !msg.includes("not found") && !msg.includes("not supported")) {
+            throw err;
+          }
+          break; // try next candidate model
+        }
+
+        console.log(
+          `[Gemini AI] Temporary retry on model "${currentModel}" (attempt ${attempt}/${maxAttempts}): ${msg}`
+        );
       }
-
-      return await ai.models.generateContent(request);
-    } catch (err) {
-      lastError = err;
-
-      if (!isRetryableGeminiError(err) || attempt === maxAttempts) {
-        throw err;
-      }
-
-      console.warn(
-        `[Gemini AI] Temporary error on attempt ${attempt}/${maxAttempts}:`,
-        err,
-      );
     }
   }
 
   throw lastError;
-}
-
-async function generateWithModelFallback(
-  ai: GoogleGenAI,
-  request: any,
-) {
-  try {
-    return await generateContentWithReliability(ai, request);
-  } catch (primaryError) {
-    if (!isRetryableGeminiError(primaryError) || FALLBACK_MODEL === MODEL) {
-      throw primaryError;
-    }
-
-    console.warn(
-      `[Gemini AI] Primary model "${MODEL}" unavailable. Trying fallback model "${FALLBACK_MODEL}".`,
-    );
-
-    return await generateContentWithReliability(ai, {
-      ...request,
-      model: FALLBACK_MODEL,
-    });
-  }
 }
 
 /**
@@ -679,18 +741,19 @@ export async function generateCoachResponseStructured(
           }
 
           try {
-            const { savePendingMeal, bangkokDateNow, bangkokTimeNow } = await import("./db");
+            const { savePendingMeal, bangkokDateNow, bangkokTimeNow, inferMealType } = await import("./db");
+            const nowTime = bangkokTimeNow();
             await savePendingMeal(userId, {
               id: `pending-${Date.now()}`,
               date: bangkokDateNow(),
-              time: bangkokTimeNow(),
+              time: nowTime,
               menu: parsed.data.menu || "มื้ออาหาร",
               calories: Math.round(parsed.data.calories),
               protein: Math.round(parsed.data.proteinGrams || 0),
               carbs: Math.round(parsed.data.carbsGrams || 0),
               fat: Math.round(parsed.data.fatGrams || 0),
               portion: parsed.data.portion || "1 จาน/ชุด",
-              meal: parsed.data.mealType || "lunch",
+              meal: parsed.data.mealType || inferMealType(nowTime),
               source: imagePart ? "photo" : "text",
               confidence: parsed.data.confidenceLevel || "medium",
               createdAt: new Date().toISOString(),
@@ -709,9 +772,9 @@ export async function generateCoachResponseStructured(
       break;
     }
   } catch (err) {
-    console.error(
-      "[Gemini AI] ❌ เรียก Gemini แบบ structured ไม่สำเร็จ:",
-      err,
+    const errMsg = getErrorMessage(err);
+    console.log(
+      `[Gemini AI] Notice: AI model temporarily unavailable (${errMsg}). Serving graceful rule-based coach response.`,
     );
   }
 

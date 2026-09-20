@@ -12,6 +12,10 @@ import {
   editFoodLogItem,
   deleteFoodLogItem,
   getDailyNutritionSummary,
+  getPendingMeal,
+  inferMealType,
+  bangkokTimeNow,
+  updatePlanDayStatus,
 } from "./db";
 import type {
   CoachPlan,
@@ -605,24 +609,22 @@ export async function executeCoachTool(
     }
 
     case "set_day_status": {
-      const plan = await getActiveCoachPlan(userId);
-      if (!plan) return { ok: false, error: "ยังไม่มีแผน" };
       if (!isValidDate(args.date)) return { ok: false, error: "date ต้องเป็น YYYY-MM-DD" };
       const status = args.status as PlanDayStatus;
-      if (!["pending", "done", "missed", "rest", "planned", "skipped", "moved"].includes(status)) {
-        return { ok: false, error: "status ต้องเป็น pending | done | missed | rest (หรือ planned | skipped | moved)" };
+      if (!["pending", "done", "missed", "rest", "postponed", "planned", "skipped", "moved"].includes(status)) {
+        return { ok: false, error: "status ต้องเป็น pending | done | missed | rest | postponed (หรือ planned | skipped | moved)" };
       }
-      const idx = plan.days.findIndex((d) => d.date === args.date);
-      if (idx < 0) return { ok: false, error: `ไม่พบวันที่ ${args.date} ในแผน` };
-      const days = plan.days.slice();
-      days[idx] = {
-        ...days[idx],
-        status,
-        coachNote: str(args.note, 300) || days[idx].coachNote,
-        completedAt: status === "done" ? now : undefined,
-      };
-      await saveUserData(userId, { coachPlan: { ...plan, days, updatedAt: now } });
-      return { ok: true };
+      const today = bangkokToday();
+      if ((args.date as string) > today) {
+        return { ok: false, error: "ไม่สามารถบันทึกหรือเปลี่ยนสถานะของวันในอนาคตได้ครับ" };
+      }
+      const result = await updatePlanDayStatus(userId, args.date as string, status, {
+        markedBy: (args.markedBy as "user" | "coach") || "coach",
+        coachNote: str(args.note, 300),
+        userNote: str(args.userNote, 300),
+        postponedToTime: str(args.postponedToTime, 20),
+      });
+      return result;
     }
 
     case "log_workout": {
@@ -645,18 +647,22 @@ export async function executeCoachTool(
         createdAt: now,
       };
       const logs = [...(user?.workoutLogs || []), log].slice(-100);
-      const patch: Record<string, unknown> = { workoutLogs: logs };
-      const plan = user?.coachPlan;
-      if (plan && completed) {
-        const idx = plan.days.findIndex((d) => d.date === date);
-        if (idx >= 0) {
-          const days = plan.days.slice();
-          days[idx] = { ...days[idx], status: "done", completedAt: now };
-          patch.coachPlan = { ...plan, days, updatedAt: now };
-        }
+      await saveUserData(userId, { workoutLogs: logs });
+
+      let planUpdateResult = null;
+      if (completed) {
+        planUpdateResult = await updatePlanDayStatus(userId, date, "done", {
+          markedBy: "coach",
+          userNote: str(args.notes, 300),
+        });
       }
-      await saveUserData(userId, patch);
-      return { ok: true, date, markedDone: Boolean(patch.coachPlan) };
+      return {
+        ok: true,
+        date,
+        markedDone: Boolean(planUpdateResult?.ok),
+        alreadyDone: planUpdateResult?.alreadyDone,
+        stats: planUpdateResult?.stats,
+      };
     }
 
     case "update_profile_info": {
@@ -724,22 +730,31 @@ export async function executeCoachTool(
     }
 
     case "log_meal": {
-      const menu = str(args.menu, 150) || "มื้ออาหาร";
-      const calories = clampInt(args.calories, 0, 10000, 0);
-      const protein = clampInt(args.protein, 0, 1000, 0);
-      const carbs = clampInt(args.carbs, 0, 2000, 0);
-      const fat = clampInt(args.fat, 0, 1000, 0);
-      const portion = str(args.portion, 100);
+      const pending = await getPendingMeal(userId);
+      const menu = str(args.menu, 150) || pending?.menu || "มื้ออาหาร";
+      const calories = args.calories !== undefined
+        ? clampInt(args.calories, 0, 10000, 0)
+        : (pending?.calories ?? 0);
+      const protein = args.protein !== undefined
+        ? clampInt(args.protein, 0, 1000, 0)
+        : (pending?.protein ?? 0);
+      const carbs = args.carbs !== undefined
+        ? clampInt(args.carbs, 0, 2000, 0)
+        : (pending?.carbs ?? 0);
+      const fat = args.fat !== undefined
+        ? clampInt(args.fat, 0, 1000, 0)
+        : (pending?.fat ?? 0);
+      const portion = str(args.portion, 100) || pending?.portion || "1 จาน";
+      const time = bangkokTimeNow();
       const meal = (["breakfast", "lunch", "dinner", "snack"].includes(args.meal as string)
         ? args.meal
-        : "lunch") as "breakfast" | "lunch" | "dinner" | "snack";
-      const source = args.source === "photo" ? "photo" : "text";
+        : (pending?.meal || inferMealType(time))) as "breakfast" | "lunch" | "dinner" | "snack";
+      const source = (args.source === "photo" || pending?.source === "photo") ? "photo" : "text";
       const confidence = (["high", "medium", "low"].includes(args.confidence as string)
         ? args.confidence
-        : "medium") as "high" | "medium" | "low";
-      const note = str(args.note, 200);
+        : (pending?.confidence || "medium")) as "high" | "medium" | "low";
+      const note = str(args.note, 200) || pending?.note;
 
-      const time = bangkokTimeNow();
       const result = await addFoodLogItem(userId, {
         menu,
         calories,
@@ -860,6 +875,7 @@ const STATUS_TH: Record<PlanDayStatus, string> = {
   planned: "รอซ้อม",
   skipped: "พลาด",
   moved: "ย้ายวันแล้ว",
+  postponed: "ขอเลื่อน",
 };
 
 function addDays(iso: string, n: number): string {
@@ -925,6 +941,71 @@ export function buildPlanContext(
       if (todayDay.nutritionTarget) {
         lines.push(`    เป้าโภชนาการวันนี้: ${todayDay.nutritionTarget.calories} kcal (P: ${todayDay.nutritionTarget.protein}g / C: ${todayDay.nutritionTarget.carbs}g / F: ${todayDay.nutritionTarget.fat}g)`);
       }
+    }
+
+    // 1. Current Week Status Breakdown (จันทร์ ถึง อาทิตย์ ของสัปดาห์ปัจจุบัน)
+    const todayObj = new Date(today + "T00:00:00Z");
+    const dayOfWeek = todayObj.getUTCDay(); // 0 is Sun, 1 is Mon
+    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const mondayObj = new Date(todayObj);
+    mondayObj.setUTCDate(todayObj.getUTCDate() + diffToMonday);
+
+    const weekDates: string[] = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(mondayObj);
+      d.setUTCDate(mondayObj.getUTCDate() + i);
+      weekDates.push(d.toISOString().slice(0, 10));
+    }
+
+    const thaiDays = ["จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส.", "อา."];
+    lines.push(`- [ภาพรวมสถานะสัปดาห์นี้ (${weekDates[0]} ถึง ${weekDates[6]})]:`);
+    let weekWorkouts = 0;
+    let weekDone = 0;
+    for (let i = 0; i < 7; i++) {
+      const dt = weekDates[i];
+      const d = plan.days.find((item) => item.date === dt);
+      const isT = dt === today;
+      if (d) {
+        const isRest = d.type === "rest" || d.isRestDay;
+        if (!isRest) weekWorkouts++;
+        if (d.status === "done") weekDone++;
+        const markedStr = d.markedBy ? ` (บันทึกโดย: ${d.markedBy === "coach" ? "โค้ช" : "ผู้ใช้"})` : "";
+        const timeStr = d.completedAt ? ` [เสร็จ: ${d.completedAt}]` : "";
+        const noteStr = d.userNote ? ` โน้ต: "${d.userNote}"` : "";
+        lines.push(`  • ${thaiDays[i]} ${dt}${isT ? " (วันนี้)" : ""}: [${d.status.toUpperCase()}] ${isRest ? "🛌 วันพักฟื้น" : "🏋️ " + d.title}${markedStr}${timeStr}${noteStr}`);
+      } else {
+        lines.push(`  • ${thaiDays[i]} ${dt}${isT ? " (วันนี้)" : ""}: ไม่มีตาราง`);
+      }
+    }
+    lines.push(`  สรุปสัปดาห์นี้: ซ้อมเสร็จแล้ว ${weekDone}/${weekWorkouts} ครั้ง`);
+
+    // 2. Yesterday pending workout check
+    const yesterday = addDays(today, -1);
+    const yDay = plan.days.find((d) => d.date === yesterday);
+    if (yDay && yDay.status === "pending" && !yDay.isRestDay && yDay.type !== "rest") {
+      lines.push(
+        `⚠️ [เตือนสำคัญ]: เมื่อวาน (${yesterday}) มีโปรแกรมซ้อม "${yDay.title}" แต่สถานะยังเป็น pending และผู้ใช้ยังไม่ได้รายงานผล! ให้โค้ชถามอย่างอบอุ่นและสนับสนุนในข้อความนี้ เช่น "เมื่อวานเป็นอย่างไรบ้างครับ ได้ซ้อมไหม?" แล้วรอฟังคำตอบเพื่อบันทึกสถานะผ่าน set_day_status (done/missed/rest) ห้ามติ๊ก missed เองโดยไม่ถามผู้ใช้ก่อนเด็ดขาด!`
+      );
+    }
+
+    // 3. Consecutive missed workouts check
+    let consecutiveMissed = 0;
+    const sortedPastDays = plan.days
+      .filter((d) => d.date < today && !d.isRestDay && d.type !== "rest")
+      .sort((a, b) => b.date.localeCompare(a.date));
+
+    for (const d of sortedPastDays) {
+      if (d.status === "missed") {
+        consecutiveMissed++;
+      } else {
+        break;
+      }
+    }
+
+    if (consecutiveMissed >= 2) {
+      lines.push(
+        `⚠️ [เตือนสำคัญ]: ผู้ใช้พลาดการซ้อมติดต่อกัน ${consecutiveMissed} วัน! ให้โค้ชพูดคุยด้วยความเข้าอกเข้าใจ ไม่ตัดสิน ไม่ทำให้รู้สึกผิด และเสนอทบทวนปรับตารางโปรแกรมให้เหมาะกับภารกิจชีวิตจริง (เช่น เสนอลดวันซ้อม หรือลดเวลาต่อครั้ง) โดยต้องอธิบายเหตุผลและรอความยินยอม/การยืนยันจากผู้ใช้ก่อนแก้โปรแกรมเสมอ!`
+      );
     }
 
     const from = addDays(today, -2);

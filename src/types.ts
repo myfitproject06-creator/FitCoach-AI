@@ -283,8 +283,11 @@ export interface CoachResponseData {
   source?: "text" | "photo";
   confidenceLevel?: "high" | "medium" | "low";
   remainingCalories?: number;
+  remainingProtein?: number;
   todayTotalCalories?: number;
+  todayTotalProtein?: number;
   targetCalories?: number;
+  targetProtein?: number;
   isOverTarget?: boolean;
   sleepHours?: number;
   recoveryScore?: number;
@@ -399,7 +402,7 @@ export interface GoogleHealthSyncState {
 
 
 // ===== Coach Plan (โปรแกรมที่โค้ช AI สร้าง/ปรับ และใช้ทำเช็คลิสต์-ปฏิทิน) =====
-export type PlanDayStatus = "pending" | "done" | "missed" | "rest" | "planned" | "skipped" | "moved";
+export type PlanDayStatus = "pending" | "done" | "missed" | "rest" | "postponed" | "planned" | "skipped" | "moved";
 
 export interface PlanExercise {
   name: string;
@@ -427,9 +430,12 @@ export interface PlanDay {
   durationMinutes?: number;
   exercises: PlanExercise[];
   nutritionTarget?: PlanDayNutritionTarget;
-  status: PlanDayStatus; // "pending" (วันซ้อม) หรือ "rest" (วันพัก) หรือ "done" / "missed"
+  status: PlanDayStatus; // "pending" (วันซ้อม) หรือ "rest" (วันพัก) หรือ "done" / "missed" / "postponed"
   coachNote?: string;
   completedAt?: string;
+  userNote?: string;
+  markedBy?: "user" | "coach";
+  postponedToTime?: string;
 }
 
 export interface PlanPhase {
@@ -584,6 +590,19 @@ export interface PendingMealLog {
   meal: "breakfast" | "lunch" | "dinner" | "snack";
   note?: string;
   createdAt: string;
+}
+
+export interface CoachPlanStats {
+  totalDays: number;
+  totalWorkouts: number;
+  completedDays: number;
+  remainingDays: number;
+  currentDayIndex: number;
+  weekCompleted: number;
+  weekDoneWorkouts?: number;
+  weekTotalWorkouts: number;
+  streakDays: number;
+  consistencyRate?: number;
 }
 
 export interface DailyNutritionSummary {

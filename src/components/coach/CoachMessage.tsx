@@ -112,7 +112,7 @@ function WorkoutCard({ response }: { response: CoachResponse }) {
       {exercises.length > 0 && (
         <div className="divide-y divide-slate-100 px-4">
           {exercises.map((exercise, index) => (
-            <div key={`${exercise.name}-${index}`} className="py-3">
+            <div key={`${exercise.name || "exercise"}-${index}`} className="py-3">
               <div className="flex items-start gap-3">
                 <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-[10px] font-bold text-emerald-700">
                   {index + 1}
@@ -135,7 +135,11 @@ function WorkoutCard({ response }: { response: CoachResponse }) {
 
       {d?.tags && d.tags.length > 0 && (
         <div className="flex flex-wrap gap-1.5 px-4 pb-3">
-          {d.tags.map((tag) => <span key={tag} className="text-[9px] text-slate-400">#{tag}</span>)}
+          {d.tags.map((tag, tagIdx) => (
+            <span key={`workout-tag-${tag || "tag"}-${tagIdx}`} className="text-[9px] text-slate-400">
+              #{tag}
+            </span>
+          ))}
         </div>
       )}
     </div>
@@ -207,23 +211,30 @@ export const CoachMessage: React.FC<CoachMessageProps> = ({
 
       {response.type === "chat" && response.data?.tags && response.data.tags.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1.5">
-          {response.data.tags.map((tag) => <InfoPill key={tag}>{tag}</InfoPill>)}
+          {response.data.tags.map((tag, tagIdx) => (
+            <InfoPill key={`chat-tag-${tag || "tag"}-${tagIdx}`}>{tag}</InfoPill>
+          ))}
         </div>
       )}
 
       {response.actions && response.actions.length > 0 && (
         <div className="mt-3 grid gap-2">
-          {response.actions.map((action) => (
-            <button
-              key={action.id}
-              type="button"
-              onClick={() => onAction?.(action)}
-              className={`flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2.5 text-[10px] font-bold transition-colors ${actionClass(action.style)}`}
-            >
-              {actionIcon(action.actionType)}
-              {action.label}
-            </button>
-          ))}
+          {response.actions.map((action, actionIdx) => {
+            const actionKey = action.id
+              ? `action-${action.id}-${actionIdx}`
+              : `action-${action.actionType || "btn"}-${action.label || ""}-${actionIdx}`;
+            return (
+              <button
+                key={actionKey}
+                type="button"
+                onClick={() => onAction?.(action)}
+                className={`flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2.5 text-[10px] font-bold transition-colors ${actionClass(action.style)}`}
+              >
+                {actionIcon(action.actionType)}
+                {action.label}
+              </button>
+            );
+          })}
         </div>
       )}
 

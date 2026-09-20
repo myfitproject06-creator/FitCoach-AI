@@ -13,6 +13,8 @@ import type {
   CoachAccountabilityState,
   ChatMessage,
   CoachPlan,
+  PlanDay,
+  PlanDayStatus,
   WorkoutLog,
   CoachProfileExtra,
   CoachIntake,
@@ -529,6 +531,187 @@ export async function saveActiveCoachPlan(
   return { activePlan, replacedPlan };
 }
 
+export interface CoachPlanStats {
+  totalDays: number;
+  totalWorkouts: number;
+  completedDays: number;
+  remainingDays: number;
+  currentDayIndex: number; // 1-based index (e.g. Day 5 of 28)
+  weekCompleted: number;
+  weekDoneWorkouts?: number;
+  weekTotalWorkouts: number;
+  streakDays: number;
+}
+
+export function calculatePlanStats(plan: CoachPlan, today = bangkokDateNow()): CoachPlanStats {
+  const days = plan.days || [];
+  const totalDays = days.length;
+  const totalWorkouts = days.filter((d) => d.type === "workout" || !d.isRestDay).length;
+  const completedDays = days.filter((d) => d.status === "done").length;
+  const remainingDays = days.filter((d) => d.date >= today && d.status !== "done" && !d.isRestDay).length;
+
+  const sorted = [...days].sort((a, b) => a.date.localeCompare(b.date));
+  let currentDayIndex = sorted.findIndex((d) => d.date === today) + 1;
+  if (currentDayIndex <= 0) {
+    if (sorted.length > 0 && today < sorted[0].date) currentDayIndex = 1;
+    else currentDayIndex = totalDays;
+  }
+
+  // Week calculation (Monday to Sunday containing `today`)
+  const todayObj = new Date(today + "T00:00:00Z");
+  const dayOfWeek = todayObj.getUTCDay(); // 0 = Sun, 1 = Mon...
+  const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const mondayObj = new Date(todayObj);
+  mondayObj.setUTCDate(todayObj.getUTCDate() + diffToMonday);
+
+  const weekDates: string[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(mondayObj);
+    d.setUTCDate(mondayObj.getUTCDate() + i);
+    weekDates.push(d.toISOString().slice(0, 10));
+  }
+
+  const thisWeekDays = days.filter((d) => weekDates.includes(d.date));
+  const weekTotalWorkouts = thisWeekDays.filter((d) => d.type === "workout" || !d.isRestDay).length;
+  const weekCompleted = thisWeekDays.filter((d) => d.status === "done").length;
+
+  // Streak: consecutive done workout days up to today
+  const pastAndToday = days
+    .filter((d) => d.date <= today && (d.type === "workout" || !d.isRestDay))
+    .sort((a, b) => b.date.localeCompare(a.date));
+
+  let streakDays = 0;
+  for (const d of pastAndToday) {
+    if (d.status === "done") {
+      streakDays++;
+    } else {
+      break;
+    }
+  }
+
+  return {
+    totalDays,
+    totalWorkouts,
+    completedDays,
+    remainingDays,
+    currentDayIndex,
+    weekCompleted,
+    weekDoneWorkouts: weekCompleted,
+    weekTotalWorkouts,
+    streakDays,
+  };
+}
+
+export async function updatePlanDayStatus(
+  userId: string,
+  date: string,
+  status: PlanDayStatus,
+  options?: {
+    completedAt?: string;
+    userNote?: string;
+    markedBy?: "user" | "coach";
+    postponedToTime?: string;
+    coachNote?: string;
+  }
+): Promise<{
+  ok: boolean;
+  alreadyDone?: boolean;
+  error?: string;
+  plan?: CoachPlan;
+  day?: PlanDay;
+  stats?: CoachPlanStats;
+}> {
+  const user = await getUserData(userId);
+  if (!user?.coachPlan) {
+    return { ok: false, error: "ไม่พบโปรแกรมที่กำลังใช้งาน (Active Plan)" };
+  }
+
+  const plan = user.coachPlan;
+  const days = Array.isArray(plan.days) ? [...plan.days] : [];
+  const dayIndex = days.findIndex((d) => d.date === date);
+  if (dayIndex === -1) {
+    return { ok: false, error: `ไม่พบวันที่ ${date} ในโปรแกรม` };
+  }
+
+  const currentDay = days[dayIndex];
+  if (currentDay.status === "done" && status === "done") {
+    const stats = calculatePlanStats(plan);
+    return {
+      ok: true,
+      alreadyDone: true,
+      plan,
+      day: currentDay,
+      stats,
+    };
+  }
+
+  const updatedDay: PlanDay = {
+    ...currentDay,
+    status,
+    coachNote: options?.coachNote !== undefined ? options.coachNote : currentDay.coachNote,
+    userNote: options?.userNote !== undefined ? options.userNote : currentDay.userNote,
+    markedBy: options?.markedBy || "user",
+    completedAt: status === "done" ? (options?.completedAt || bangkokTimeNow()) : currentDay.completedAt,
+    postponedToTime: options?.postponedToTime !== undefined ? options.postponedToTime : currentDay.postponedToTime,
+  };
+
+  days[dayIndex] = updatedDay;
+  const now = new Date().toISOString();
+  const updatedPlan: CoachPlan = {
+    ...plan,
+    days,
+    updatedAt: now,
+  };
+
+  const existingPlans: CoachPlan[] = Array.isArray(user.coachPlans) ? [...user.coachPlans] : [];
+  const planIdx = existingPlans.findIndex((p) => p.id === plan.id);
+  if (planIdx >= 0) {
+    existingPlans[planIdx] = updatedPlan;
+  } else {
+    existingPlans.push(updatedPlan);
+  }
+
+  const stats = calculatePlanStats(updatedPlan);
+
+  // Sync streak and completion with user.status
+  const prevStatus = user.status || {
+    level: 1,
+    xp: 0,
+    nextLevelXp: 1000,
+    rank: "C",
+    strength: 50,
+    endurance: 50,
+    mobility: 50,
+    vitality: 50,
+    recovery: 50,
+    condition: 80,
+    conditionLabel: "Good",
+    trainingMomentum: 80,
+    momentumDays: 0,
+    programAdherence: 80,
+  };
+
+  const updatedStatus = {
+    ...prevStatus,
+    momentumDays: stats.streakDays,
+    streakDays: stats.streakDays,
+    totalWorkoutsCompleted: stats.completedDays,
+  };
+
+  await saveUserData(userId, {
+    coachPlan: updatedPlan,
+    coachPlans: existingPlans,
+    status: updatedStatus as any,
+  });
+
+  return {
+    ok: true,
+    plan: updatedPlan,
+    day: updatedDay,
+    stats,
+  };
+}
+
 // ====================================================
 // Daily Food Logging & Nutrition Tracking
 // ====================================================
@@ -544,6 +727,16 @@ export function bangkokTimeNow(): string {
     minute: "2-digit",
     hour12: false,
   }); // HH:MM
+}
+
+export function inferMealType(timeStr = bangkokTimeNow()): "breakfast" | "lunch" | "dinner" | "snack" {
+  const parts = timeStr.split(":");
+  const h = Number(parts[0]) || 12;
+  if (h >= 5 && h < 11) return "breakfast";
+  if (h >= 11 && h < 15) return "lunch";
+  if (h >= 15 && h < 18) return "snack";
+  if (h >= 18 && h < 22) return "dinner";
+  return "snack";
 }
 
 export async function getDailyFoodLog(
@@ -723,7 +916,7 @@ export async function addFoodLogItem(
     fat: Math.round(Number(itemInput.fat) || 0),
     source: itemInput.source || "text",
     confidence: itemInput.confidence || "high",
-    meal: itemInput.meal || "lunch",
+    meal: itemInput.meal || inferMealType(time),
     note: itemInput.note,
     createdAt: new Date().toISOString(),
   };
@@ -771,6 +964,13 @@ export async function addFoodLogItem(
   return { item: newItem, summary };
 }
 
+function findLastMatchIndex<T>(arr: T[], predicate: (item: T) => boolean): number {
+  for (let i = arr.length - 1; i >= 0; i--) {
+    if (predicate(arr[i])) return i;
+  }
+  return -1;
+}
+
 export async function editFoodLogItem(
   userId: string,
   itemId?: string,
@@ -795,6 +995,17 @@ export async function editFoodLogItem(
     targetIndex = items.length - 1;
   } else {
     targetIndex = items.findIndex((i) => i.id === itemId);
+    if (targetIndex < 0) {
+      const lower = itemId.toLowerCase();
+      targetIndex = findLastMatchIndex(items, (i: FoodLogItem) =>
+        i.menu.toLowerCase().includes(lower) ||
+        (lower.includes("เช้า") && i.meal === "breakfast") ||
+        (lower.includes("เที่ยง") && i.meal === "lunch") ||
+        (lower.includes("กลางวัน") && i.meal === "lunch") ||
+        (lower.includes("เย็น") && i.meal === "dinner") ||
+        (lower.includes("ว่าง") && i.meal === "snack")
+      );
+    }
   }
 
   if (targetIndex < 0) {
@@ -866,7 +1077,18 @@ export async function deleteFoodLogItem(
   if (!itemId || itemId === "latest") {
     deletedItem = items.pop() || null;
   } else {
-    const idx = items.findIndex((i) => i.id === itemId);
+    let idx = items.findIndex((i) => i.id === itemId);
+    if (idx < 0) {
+      const lower = itemId.toLowerCase();
+      idx = findLastMatchIndex(items, (i: FoodLogItem) =>
+        i.menu.toLowerCase().includes(lower) ||
+        (lower.includes("เช้า") && i.meal === "breakfast") ||
+        (lower.includes("เที่ยง") && i.meal === "lunch") ||
+        (lower.includes("กลางวัน") && i.meal === "lunch") ||
+        (lower.includes("เย็น") && i.meal === "dinner") ||
+        (lower.includes("ว่าง") && i.meal === "snack")
+      );
+    }
     if (idx >= 0) {
       deletedItem = items.splice(idx, 1)[0] || null;
     }

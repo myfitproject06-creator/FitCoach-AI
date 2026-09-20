@@ -4,6 +4,7 @@ import { getUserData, listUserData, saveUserData, type UserData } from "./db";
 import { bangkokToday, executeCoachTool } from "./coach-plan";
 import {
   buildWorkoutReminderMessages,
+  buildRestDayReminderMessages,
   buildMorningBriefingMessages,
   buildNightRecapMessages,
   type LineMessagePayload,
@@ -130,36 +131,61 @@ function isAlreadyDone(user: UserData, date: string): boolean {
 
 async function sendReminder(user: UserData, mode: "on_time" | "overdue"): Promise<boolean> {
   const workout = workoutForToday(user);
-  if (!workout || workout.day?.isRestDay || isAlreadyDone(user, workout.date)) return false;
+  if (!workout) return false;
+
+  const isRest = Boolean(workout.day?.isRestDay || workout.day?.type === "rest");
+
+  // On rest days, do not send overdue warnings; only send on_time card
+  if (isRest && mode === "overdue") return false;
+  if (!isRest && isAlreadyDone(user, workout.date)) return false;
 
   const state = getState(user);
   const key = `${workout.date}:${mode}`;
   if (mode === "on_time" && state.lastReminderKey === key) return false;
   if (mode === "overdue" && state.overdueReminderKey === key) return false;
 
-  const sent = await pushLineMessages(
-    user.userId,
-    buildWorkoutReminderMessages({
+  const appUrl = process.env.APP_URL || "";
+  const scheduledTime = reminderTimeForUser(user);
+
+  let messages: LineMessagePayload[];
+  if (isRest) {
+    const nt = workout.day?.nutritionTarget || user.coachPlan?.dailyNutritionTarget;
+    messages = buildRestDayReminderMessages({
+      userName: user.profile?.name,
+      calories: nt?.calories || 1800,
+      protein: nt?.protein || 120,
+      carbs: nt?.carbs || 180,
+      fat: nt?.fat || 50,
+      notes: workout.day?.coachNote,
+      appUrl,
+    });
+  } else {
+    messages = buildWorkoutReminderMessages({
       title: workout.title,
       focus: workout.focus,
       durationMinutes: workout.durationMinutes,
       exerciseCount: workout.exercises?.length || 0,
+      exercises: workout.exercises,
+      scheduledTime: scheduledTime ? `${scheduledTime} น.` : undefined,
+      appUrl,
       overdue: mode === "overdue",
-    }),
-  );
+    });
+  }
+
+  const sent = await pushLineMessages(user.userId, messages);
   if (!sent) return false;
 
   const next: ReminderState = {
     ...state,
-    scheduledTime: state.scheduledTime || reminderTimeForUser(user),
-    status: mode === "overdue" ? "overdue" : "workout_time",
-    lastReminderType: mode === "overdue" ? "late_warning" : "workout_time",
-    lastReminderText: mode === "overdue" ? "เลยเวลาซ้อมแล้ว" : "ถึงเวลาออกกำลังกายแล้ว",
+    scheduledTime: state.scheduledTime || scheduledTime,
+    status: isRest ? "rest_day" : mode === "overdue" ? "overdue" : "workout_time",
+    lastReminderType: isRest ? "rest_day" : mode === "overdue" ? "late_warning" : "workout_time",
+    lastReminderText: isRest ? "วันนี้วันพักผ่อน" : mode === "overdue" ? "เลยเวลาซ้อมแล้ว" : "ถึงเวลาออกกำลังกายแล้ว",
     lastReminderAt: new Date().toISOString(),
     ...(mode === "on_time" ? { lastReminderKey: key } : { overdueReminderKey: key }),
   };
   await saveUserData(user.userId, { accountability: next as any });
-  console.log(`[Reminder] sent ${mode} -> userId=${user.userId} date=${workout.date}`);
+  console.log(`[Reminder] sent ${mode} (isRest=${isRest}) -> userId=${user.userId} date=${workout.date}`);
   return true;
 }
 

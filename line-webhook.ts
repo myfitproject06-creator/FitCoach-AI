@@ -9,6 +9,8 @@ import {
   addFoodLogItem,
   getDailyNutritionSummary,
   checkAndIncrementDailyPhotoCount,
+  updatePlanDayStatus,
+  calculatePlanStats,
 } from "./db";
 import type { ChatMessage, CoachActionType, CoachResponse } from "./src/types";
 import { generateCoachResponseStructured } from "./coach-ai";
@@ -18,6 +20,7 @@ import {
   buildLineReplyMessages,
   buildLineFlexMessage,
   buildWorkoutSuccessMessages,
+  buildPostponeOptionsMessages,
   type LineMessagePayload,
 } from "./line-flex";
 
@@ -127,17 +130,25 @@ async function handleConfirmMeal(
   await savePendingMeal(userId, null);
 
   let replyText = `✅ บันทึก "${pending.menu}" เรียบร้อยแล้วครับ!\n`;
-  replyText += `ประมาณ ${pending.calories} kcal (โปรตีน ~${pending.protein}g, คาร์บ ~${pending.carbs}g, ไขมัน ~${pending.fat}g)\n\n`;
+  replyText += `มื้อนี้ประมาณ ${pending.calories} kcal (โปรตีน ~${pending.protein}g, คาร์บ ~${pending.carbs}g, ไขมัน ~${pending.fat}g)\n\n`;
 
   if (summary.hasActivePlan && summary.target) {
-    replyText += `📊 สะสมวันนี้: ประมาณ ${summary.todayTotal.calories} / ${summary.target.calories} kcal\n`;
+    replyText += `📊 สะสมวันนี้: ประมาณ ${summary.todayTotal.calories} / ${summary.target.calories} kcal (โปรตีน ~${summary.todayTotal.protein} / ${summary.target.protein}g)\n`;
     if (summary.isOver) {
-      replyText += `⚠️ เกินเป้าหมายวันนี้ไปประมาณ ${summary.overCalories} kcal ไม่ต้องกังวลนะครับ มื้อถัดไปเน้นผักและโปรตีนไขมันต่ำ แล้วขยับร่างกายเพิ่มอีกนิด สู้ต่อได้ครับ! 💪`;
+      replyText += `โควต้าวันนี้: เกินเป้าหมายไปประมาณ ${summary.overCalories} kcal\n\n`;
+      replyText += `โค้ชขอเป็นกำลังใจให้นะครับ! เกินนิดหน่อยเป็นเรื่องปกติของการใช้ชีวิต ไม่ต้องกังวลเลย มื้อเย็นเน้นโปรตีนลดคาร์บลงหน่อย หรือพรุ่งนี้เดินเพิ่มอีกนิด สบายๆ ครับ 💪✨`;
     } else {
-      replyText += `🎯 ยังเหลือโควต้าอีกประมาณ ${summary.remainingCalories} kcal (${summary.remainingPercent}% ของเป้าหมาย) ยอดเยี่ยมมากครับ! 👏`;
+      const remProtein = summary.remaining?.protein ?? Math.max(0, summary.target.protein - summary.todayTotal.protein);
+      replyText += `โควต้าที่เหลือ: แคลอรี่เหลืออีกประมาณ ${summary.remainingCalories} kcal, โปรตีนเหลืออีก ~${remProtein}g\n\n`;
+      if (summary.todayTotal.calories < summary.target.calories * 0.4 && (pending.meal === "dinner" || pending.meal === "lunch")) {
+        replyText += `จังหวะวันนี้ดีมากครับ แต่ดูเหมือนพลังงานรวมยังค่อนข้างน้อย อย่าลืมเติมสารอาหารและโปรตีนให้เพียงพอเพื่อการฟื้นตัวของกล้ามเนื้อนะครับ 🥗`;
+      } else {
+        replyText += `อยู่ในเป้าหมายอย่างยอดเยี่ยมมากครับ! รักษาจังหวะการกินแบบนี้ไว้ได้เลย โค้ชเป็นกำลังใจให้เสมอครับ 👏🔥`;
+      }
     }
   } else {
-    replyText += `📊 สะสมวันนี้: ประมาณ ${summary.todayTotal.calories} kcal (โปรตีน ~${summary.todayTotal.protein}g)\nหากต้องการตั้งเป้าหมายแคลอรี่รายวัน ให้โค้ชช่วยสร้างโปรแกรมได้เลยครับ!`;
+    replyText += `📊 สะสมวันนี้: ประมาณ ${summary.todayTotal.calories} kcal (โปรตีน ~${summary.todayTotal.protein}g, คาร์บ ~${summary.todayTotal.carbs}g, ไขมัน ~${summary.todayTotal.fat}g)\n\n`;
+    replyText += `บันทึกเรียบร้อยครับ! ตอนนี้ยังไม่มีโปรแกรม active ในระบบ หากต้องการตั้งเป้าหมายแคลอรี่และโปรตีนรายวัน สามารถบอกให้โค้ชช่วยสร้างโปรแกรมให้ได้เลยนะครับ! 🎯`;
   }
 
   const coachResponse: CoachResponse = {
@@ -151,9 +162,13 @@ async function handleConfirmMeal(
       carbsGrams: pending.carbs,
       fatGrams: pending.fat,
       confidenceLevel: pending.confidence,
+      mealType: pending.meal,
       todayTotalCalories: summary.todayTotal.calories,
+      todayTotalProtein: summary.todayTotal.protein,
       targetCalories: summary.target?.calories,
+      targetProtein: summary.target?.protein,
       remainingCalories: summary.remainingCalories,
+      remainingProtein: summary.remaining?.protein,
       isOverTarget: summary.isOver,
     },
   };
@@ -183,8 +198,8 @@ async function handleConfirmMeal(
 }
 
 function parseFitCoachPostback(data: string):
-  | { kind: "coach"; actionType: CoachActionType; id?: string }
-  | { kind: "menu"; action: string }
+  | { kind: "coach"; actionType: CoachActionType; id?: string; rawParams: URLSearchParams }
+  | { kind: "menu"; action: string; rawParams: URLSearchParams }
   | null {
   const params = new URLSearchParams(data);
   const fitcoachAction = params.get("fitcoach_action");
@@ -193,12 +208,13 @@ function parseFitCoachPostback(data: string):
       "start_workout", "snooze", "cannot_do", "view_plan", "log_food",
       "apply_program", "clear_penalty", "confirm", "edit",
     ];
-    if (!allowed.includes(fitcoachAction as CoachActionType)) return null;
-    return { kind: "coach", actionType: fitcoachAction as CoachActionType, id: params.get("id") || undefined };
+    if (allowed.includes(fitcoachAction as CoachActionType)) {
+      return { kind: "coach", actionType: fitcoachAction as CoachActionType, id: params.get("id") || undefined, rawParams: params };
+    }
   }
 
   const menuAction = params.get("action");
-  if (menuAction) return { kind: "menu", action: menuAction };
+  if (menuAction) return { kind: "menu", action: menuAction, rawParams: params };
   return null;
 }
 
@@ -367,28 +383,193 @@ async function handleReminderCannotDo(event: LineEvent, userId: string, channelA
   }], channelAccessToken);
 }
 
+async function handleWorkoutDoneReport(event: LineEvent, userId: string, channelAccessToken: string): Promise<void> {
+  if (!event.replyToken) return;
+  const today = bangkokToday();
+  const updateResult = await updatePlanDayStatus(userId, today, "done", { markedBy: "user" });
+
+  if (updateResult.alreadyDone) {
+    await replyLineMessages(event.replyToken, [{
+      type: "text",
+      text: "✅ วันนี้คุณได้บันทึกว่าซ้อมเสร็จเรียบร้อยไปแล้วครับ! ไม่ต้องกดย้ำนะ พักผ่อนให้สบายใจเลยครับ 💪",
+    }], channelAccessToken);
+    return;
+  }
+
+  const userData = await getUserData(userId);
+  const day = userData?.coachPlan?.days?.find((d) => d.date === today);
+  const workout = userData?.workout;
+  const exercises = (day?.exercises || workout?.exercises || []).map((e: any) => ({
+    name: e.nameTh || e.name || "Exercise",
+    reps: String(e.reps ?? ""),
+    weight: e.suggestedWeight,
+  }));
+
+  // Also record workout log
+  await executeCoachTool(userId, "log_workout", {
+    date: today,
+    completed: true,
+    exercises,
+  });
+
+  const stats = updateResult.stats;
+  const remainingDays = stats?.remainingDays ?? 0;
+  const weekDone = stats?.weekDoneWorkouts ?? 1;
+  const weekTotal = stats?.weekTotalWorkouts ?? 3;
+  const streakDays = stats?.streakDays ?? (userData?.status?.streakDays || 1);
+
+  const title = day?.title || workout?.titleTh || workout?.title || "Workout ประจำวัน";
+  const durationMinutes = day?.durationMinutes || workout?.durationMinutes || 45;
+
+  const successMessages = buildWorkoutSuccessMessages({
+    title,
+    durationMinutes,
+    completedExercises: exercises.length || undefined,
+    streakDays,
+  });
+
+  const replyMessages: LineMessagePayload[] = [
+    {
+      type: "text",
+      text: `🎉 ยอดเยี่ยมมากครับ! บันทึกวันซ้อมสำเร็จแล้ว 💪\n\n📊 สรุปความก้าวหน้า:\n• สัปดาห์นี้ซ้อมไปแล้ว: ${weekDone}/${weekTotal} ครั้ง\n• ฝึกต่อเนื่อง (Streak): ${streakDays} วัน 🔥\n• เหลืออีก ${remainingDays} วันของโปรแกรมนี้ ลุยต่ออย่างมีวินัยครับ! 🚀`,
+    },
+    ...successMessages.filter((m) => m.type === "flex"),
+  ];
+
+  await replyLineMessages(event.replyToken, replyMessages, channelAccessToken);
+}
+
+async function handleWorkoutPostponeReport(event: LineEvent, userId: string, channelAccessToken: string): Promise<void> {
+  if (!event.replyToken) return;
+  const today = bangkokToday();
+  await updatePlanDayStatus(userId, today, "postponed", { markedBy: "user" });
+
+  const appUrl = process.env.APP_URL || "";
+  const messages = buildPostponeOptionsMessages({ appUrl });
+  await replyLineMessages(event.replyToken, messages, channelAccessToken);
+}
+
+async function handleWorkoutSnoozeMins(event: LineEvent, userId: string, mins: number, channelAccessToken: string): Promise<void> {
+  if (!event.replyToken) return;
+  const today = bangkokToday();
+  await snoozeWorkoutReminder(userId, mins);
+
+  const now = new Date();
+  const targetDate = new Date(now.getTime() + mins * 60_000);
+  const targetTimeStr = targetDate.toLocaleTimeString("en-GB", {
+    timeZone: "Asia/Bangkok",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+
+  await updatePlanDayStatus(userId, today, "postponed", {
+    markedBy: "user",
+    postponedToTime: `${targetTimeStr} น.`,
+  });
+
+  await replyLineMessages(event.replyToken, [{
+    type: "text",
+    text: `⏰ รับทราบครับ! โค้ชเลื่อนเวลาเตือนออกไป ${mins} นาที (ประมาณ ${targetTimeStr} น.) ให้เรียบร้อยครับ\n\nสถานะในปฏิทินอัปเดตเป็น "เลื่อน" เรียบร้อย พอพร้อมแล้วกด "เสร็จแล้ว" ในการ์ดเตือนได้เลยครับ 💪`,
+  }], channelAccessToken);
+}
+
+async function handleWorkoutSnoozeTime(event: LineEvent, userId: string, targetTime: string, channelAccessToken: string): Promise<void> {
+  if (!event.replyToken) return;
+  const today = bangkokToday();
+
+  const bkkNow = new Date();
+  const bkkTimeStr = bkkNow.toLocaleTimeString("en-GB", {
+    timeZone: "Asia/Bangkok",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const [curH, curM] = bkkTimeStr.split(":").map(Number);
+  const [tarH, tarM] = targetTime.split(":").map(Number);
+  let diffMins = (tarH * 60 + tarM) - (curH * 60 + curM);
+  if (diffMins <= 0) diffMins = 30;
+
+  await snoozeWorkoutReminder(userId, diffMins);
+  await updatePlanDayStatus(userId, today, "postponed", {
+    markedBy: "user",
+    postponedToTime: `${targetTime} น.`,
+  });
+
+  await replyLineMessages(event.replyToken, [{
+    type: "text",
+    text: `⏰ รับทราบครับ! โค้ชตั้งเตือนใหม่เวลา ${targetTime} น. วันนี้ให้แล้วครับ\n\nสถานะในปฏิทินอัปเดตเป็น "เลื่อน" เรียบร้อย แล้วพบกันตอนช่วงเวลาซ้อมนะครับ สู้ๆ ครับ! 🌟`,
+  }], channelAccessToken);
+}
+
+async function handleWorkoutCannotDoReport(event: LineEvent, userId: string, channelAccessToken: string): Promise<void> {
+  if (!event.replyToken) return;
+  const today = bangkokToday();
+  await updatePlanDayStatus(userId, today, "missed", { markedBy: "user" });
+
+  await replyLineMessages(event.replyToken, [{
+    type: "text",
+    text: `ไม่เป็นไรเลยครับ 🤍 ร่างกายและภารกิจของแต่ละวันไม่เหมือนกัน โค้ชเข้าใจดีครับ!\n\nอยากถามสั้นๆ ว่าวันนี้เกิดอะไรขึ้นครับ? (เหนื่อยมาก / ติดงานด่วน / ไม่สบาย / ร่างกายไม่พร้อม)\n\nถ้าบอกโค้ช โค้ชจะช่วยวางแผนให้ เช่น เลื่อนท่าไปชดเชยวันพัก หรือลดความหนักของวันถัดไป โดยโค้ชจะรอให้คุณยืนยันก่อนปรับโปรแกรมเสมอครับ 🌟`,
+  }], channelAccessToken);
+}
+
+async function handleViewCalendar(event: LineEvent, userId: string, channelAccessToken: string): Promise<void> {
+  if (!event.replyToken) return;
+  const appUrl = (process.env.APP_URL || "").replace(/\/$/, "");
+  const calendarUrl = appUrl ? `${appUrl}?tab=plan` : "";
+
+  await replyLineMessages(event.replyToken, [{
+    type: "text",
+    text: calendarUrl
+      ? `📅 คุณสามารถเปิดดูและติ๊กปฏิทินเช็คลิสต์รายวันตลอดโปรแกรมได้ที่นี่ครับ:\n${calendarUrl}\n\nในปฏิทินจะแสดงสถานะทุกวันทั้งโปรแกรม พร้อมให้คุณติ๊กย้อนหลังหรือตรวจสอบผลซ้อมได้เลยครับ!`
+      : `📅 คุณสามารถเปิดดูปฏิทินเช็คลิสต์รายวันตลอดโปรแกรมได้ที่หน้าเมนู "ตารางซ้อม" ในเว็บแอพ FitCoach AI ครับ!`,
+  }], channelAccessToken);
+}
+
 async function handlePostbackAction(event: LineEvent, userId: string, channelAccessToken: string): Promise<void> {
   if (!event.replyToken || !event.postback?.data) return;
   const parsed = parseFitCoachPostback(event.postback.data);
   if (!parsed) return;
 
-  if (parsed.kind === "coach" && parsed.id === "complete_workout") {
-    await handleCompleteWorkout(event, userId, channelAccessToken);
-    return;
+  // Handle reporting buttons
+  if (parsed.kind === "menu" || parsed.kind === "coach") {
+    const action = parsed.kind === "menu" ? parsed.action : (parsed.id || parsed.actionType);
+
+    if (action === "workout_done" || action === "complete_workout") {
+      await handleWorkoutDoneReport(event, userId, channelAccessToken);
+      return;
+    }
+
+    if (action === "workout_postpone" || action === "snooze" || action === "reminder_snooze") {
+      await handleWorkoutPostponeReport(event, userId, channelAccessToken);
+      return;
+    }
+
+    if (action === "workout_snooze_mins") {
+      const mins = Number(parsed.rawParams.get("mins") || 60);
+      await handleWorkoutSnoozeMins(event, userId, mins, channelAccessToken);
+      return;
+    }
+
+    if (action === "workout_snooze_time") {
+      const time = parsed.rawParams.get("time") || "19:00";
+      await handleWorkoutSnoozeTime(event, userId, time, channelAccessToken);
+      return;
+    }
+
+    if (action === "workout_cannot_do" || action === "cannot_do" || action === "reminder_cannot_do") {
+      await handleWorkoutCannotDoReport(event, userId, channelAccessToken);
+      return;
+    }
+
+    if (action === "view_calendar") {
+      await handleViewCalendar(event, userId, channelAccessToken);
+      return;
+    }
   }
 
   if (parsed.kind === "coach" && parsed.id === "reminder_start") {
     await handleReminderStart(event, userId, channelAccessToken);
-    return;
-  }
-
-  if (parsed.kind === "coach" && parsed.id === "reminder_snooze") {
-    await handleReminderSnooze(event, userId, channelAccessToken);
-    return;
-  }
-
-  if (parsed.kind === "coach" && parsed.id === "reminder_cannot_do") {
-    await handleReminderCannotDo(event, userId, channelAccessToken);
     return;
   }
 
@@ -499,7 +680,12 @@ async function handleImageMessage(
   let response: CoachResponse;
   try {
     response = await generateCoachResponseStructured(
-      "ช่วยประเมินสารอาหารจากรูปภาพนี้ให้หน่อยครับ (บอกชื่อเมนูโดยประมาณ ปริมาณ และแมโคร 4 ตัวเป็นเลขกลมๆ พร้อมเทียบกับโควตาวันนี้ และถามยืนยันก่อนบันทึก)",
+      "ช่วยประเมินสารอาหารจากรูปภาพนี้ให้หน่อยครับ:\n" +
+      "1. ตรวจสอบก่อนว่าเป็นอาหารหรือเครื่องดื่มหรือไม่ หากไม่ใช่รูปอาหาร ให้ตอบอย่างสุภาพว่า 'ดูเหมือนจะไม่ใช่รูปอาหารครับ ส่งรูปอาหารหรือพิมพ์บอกเมนูได้เลยครับ' โดยใช้ type: 'chat' และไม่ต้องใส่ data โภชนาการ\n" +
+      "2. หากเป็นอาหาร ให้ประเมินชื่อเมนูโดยประมาณ ปริมาณ และสารอาหาร 4 ค่า (แคลอรี่, โปรตีน, คาร์บ, ไขมัน) เป็นตัวเลขกลมๆ ห้ามมีทศนิยม พร้อมระบุระดับความมั่นใจ\n" +
+      "3. ถ้าในรูปมีอาหารหลายอย่าง ให้แยกรายการและรวมยอดทั้งมื้อ\n" +
+      "4. ถ้ารูปไม่ชัด ให้ประมาณการเท่าที่เห็น บอกสมมติฐาน และให้ confidenceLevel: 'low'\n" +
+      "5. สรุปผลกระทบต่อโควต้าวันนี้ และถามยืนยันก่อนบันทึกทุกครั้ง (ห้ามบันทึกลง DB ทันที)",
       {
         userProfile: userData?.profile,
         workoutPlan: userData?.workout,
@@ -605,8 +791,28 @@ export async function lineWebhookHandler(req: Request, res: Response) {
         continue;
       }
 
-      const nutritionSummary = await getDailyNutritionSummary(userId);
       const pendingMeal = await getPendingMeal(userId);
+
+      // ถ้ามีมื้ออาหารรอยืนยันอยู่ แล้วผู้ใช้พิมพ์คำยืนยัน ให้บันทึกลงระบบทันที
+      const trimmedText = userText.trim();
+      const isConfirm = /^(บันทึก|ยืนยัน|ใช่|ตกลง|โอเค|บันทึกเลย|จัดไป|เอาเลย|confirm|save|yes|ok|okay)$/i.test(trimmedText);
+      if (isConfirm && pendingMeal) {
+        await handleConfirmMeal(event, userId, channelAccessToken);
+        continue;
+      }
+
+      // ถ้าผู้ใช้พิมพ์ขอยกเลิก
+      const isCancel = /^(ยกเลิก|ไม่บันทึก|ไม่เอา|ยกเลิกมื้อนี้|cancel)$/i.test(trimmedText);
+      if (isCancel && pendingMeal) {
+        await savePendingMeal(userId, null);
+        await replyLineMessages(event.replyToken, [{
+          type: "text",
+          text: `รับทราบครับ ยกเลิกการบันทึกมื้อ "${pendingMeal.menu}" ให้เรียบร้อยแล้วครับ หากต้องการบันทึกมื้อใหม่ สามารถส่งรูปหรือพิมพ์บอกเมนูได้ตลอดเลยนะครับ 🥗`,
+        }], channelAccessToken);
+        continue;
+      }
+
+      const nutritionSummary = await getDailyNutritionSummary(userId);
       const previous: ChatMessage[] = userData?.messages || [];
       const response = await generateCoachResponseStructured(
         userText,

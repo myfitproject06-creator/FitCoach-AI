@@ -13,6 +13,8 @@ import {
   getDailyNutritionSummary,
   getDailyFoodLog,
   getPendingMeal,
+  updatePlanDayStatus,
+  calculatePlanStats,
 } from "./db";
 import { generateCoachResponseStructured, type HistoryItem } from "./coach-ai";
 import { registerLineRichMenuRoutes } from "./line-richmenu";
@@ -312,6 +314,69 @@ async function startServer() {
       const summary = await getDailyNutritionSummary(userId, date);
       const log = await getDailyFoodLog(userId, date);
       return res.json({ success: true, summary, log });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err?.message || "Error" });
+    }
+  });
+
+  // ----------------------------------------------------
+  // Coach Plan & Daily Checklist Calendar API
+  // ----------------------------------------------------
+  app.get("/api/coach-plan/active", async (req: any, res) => {
+    try {
+      const rawSession = req.signedCookies?.fitcoach_session;
+      let userId = "guest_web_user";
+      if (rawSession) {
+        try {
+          const sessionUser = JSON.parse(rawSession);
+          if (sessionUser?.userId) userId = sessionUser.userId;
+        } catch {}
+      }
+      if (req.query.userId) userId = String(req.query.userId);
+
+      const user = await getUserData(userId);
+      const plan = user?.coachPlan || null;
+      const stats = plan ? calculatePlanStats(plan) : null;
+      return res.json({ success: true, plan, stats });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err?.message || "Error" });
+    }
+  });
+
+  app.post("/api/coach-plan/day-status", async (req: any, res) => {
+    try {
+      const rawSession = req.signedCookies?.fitcoach_session;
+      let userId = "guest_web_user";
+      if (rawSession) {
+        try {
+          const sessionUser = JSON.parse(rawSession);
+          if (sessionUser?.userId) userId = sessionUser.userId;
+        } catch {}
+      }
+      if (req.body?.userId) userId = String(req.body.userId);
+
+      const { date, status, userNote, postponedToTime } = req.body || {};
+      if (!date || !status) {
+        return res.status(400).json({ success: false, error: "Missing date or status" });
+      }
+
+      const result = await updatePlanDayStatus(userId, date, status, {
+        markedBy: "user",
+        userNote,
+        postponedToTime,
+      });
+
+      if (!result.ok) {
+        return res.status(400).json({ success: false, error: result.error });
+      }
+
+      return res.json({
+        success: true,
+        alreadyDone: result.alreadyDone,
+        plan: result.plan,
+        day: result.day,
+        stats: result.stats,
+      });
     } catch (err: any) {
       return res.status(500).json({ success: false, error: err?.message || "Error" });
     }

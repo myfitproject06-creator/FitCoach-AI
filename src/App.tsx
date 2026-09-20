@@ -182,6 +182,11 @@ export default function App() {
       window.history.replaceState({}, document.title, window.location.pathname);
     }
 
+    const tabParam = urlParams.get("tab");
+    if (tabParam === "plan" || tabParam === "home" || tabParam === "progress" || tabParam === "profile") {
+      setCurrentTab(tabParam as NavTab);
+    }
+
     // 2. เรียก API /api/me เพื่อตรวจเซสชันฝั่งเซิร์ฟเวอร์
     const checkAuthStatus = async () => {
       try {
@@ -666,6 +671,28 @@ export default function App() {
           quickReplies: ["เปิดหน้าต่างซ้อม", "คำนวณอาหารวันนี้", "ปรึกษาท่าฝึก"],
         };
         setMessages((prev) => [...prev, botReply]);
+
+        if (coachResponse?.type === "meal_recorded" && coachResponse.data?.calories != null) {
+          const mData = coachResponse.data;
+          const newMeal: MealItem = {
+            id: "meal-" + Date.now(),
+            name: mData.menu || "มื้ออาหาร",
+            calories: Math.round(mData.calories || 0),
+            protein: Math.round(mData.proteinGrams || 0),
+            carbs: Math.round(mData.carbsGrams || 0),
+            fat: Math.round(mData.fatGrams || 0),
+            time: new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }),
+            type: mData.mealType || "lunch",
+          };
+          setNutrition((prev) => ({
+            ...prev,
+            meals: [newMeal, ...prev.meals],
+            currentCalories: mData.todayTotalCalories ?? (prev.currentCalories + newMeal.calories),
+            currentProtein: mData.todayTotalProtein ?? (prev.currentProtein + newMeal.protein),
+            currentCarbs: prev.currentCarbs + newMeal.carbs,
+            currentFat: prev.currentFat + newMeal.fat,
+          }));
+        }
         return;
       }
     } catch (e) {
@@ -707,7 +734,7 @@ export default function App() {
   // LINE Bot Send Image handler
   const handleSendImage = (file: File) => {
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       const imgDataUrl = e.target?.result as string;
       const userImgMsg: ChatMessage = {
         id: `user-img-${Date.now()}`,
@@ -718,17 +745,56 @@ export default function App() {
       };
       setMessages((prev) => [...prev, userImgMsg]);
 
-      // Simulate AI Vision recognition response
+      try {
+        const base64Data = imgDataUrl.split(",")[1];
+        const mimeType = file.type || "image/jpeg";
+
+        const res = await fetch("/api/ai/coach-chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: "ช่วยประเมินสารอาหารจากรูปภาพนี้ให้หน่อยครับ (บอกชื่อเมนูโดยประมาณ ปริมาณ และแมโคร 4 ตัวเป็นเลขกลมๆ พร้อมเทียบกับโควตาวันนี้ และถามยืนยันก่อนบันทึก)",
+            image: {
+              data: base64Data,
+              mimeType,
+            },
+            userProfile: profile,
+            workoutPlan: workout,
+            fitnessStatus: status,
+            nutritionData: nutrition,
+            recoveryData: recovery,
+          }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const coachResponse = data.coachResponse as CoachResponse | undefined;
+          const botReply: ChatMessage = {
+            id: `bot-vision-${Date.now()}`,
+            sender: "bot",
+            text: coachResponse?.message || data.reply || "ประเมินรูปภาพเรียบร้อยครับ",
+            timestamp: new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }),
+            coachResponse,
+            quickReplies: ["ยืนยันบันทึกมื้อนี้", "ขอแก้ไขข้อมูลนี้ครับ", "วันนี้กินอะไรไปบ้าง"],
+          };
+          setMessages((prev) => [...prev, botReply]);
+          return;
+        }
+      } catch (err) {
+        console.warn("Error analyzing image via /api/ai/coach-chat:", err);
+      }
+
+      // Fallback
       setTimeout(() => {
         const aiVisionReply: ChatMessage = {
           id: `bot-vision-${Date.now()}`,
           sender: "bot",
-          text: `📸 **AI ตรวจวิเคราะห์รูปภาพสำเร็จ!**\n\nตรวจพบ: อาหารจานหลัก (โปรตีนจากเนื้อสัตว์ + คาร์โบไฮเดรตเชิงซ้อน)\n🔥 พลังงานโดยประมาณ: **480 kcal**\n🥩 โปรตีน: **32 กรัม** | 🍞 คาร์บ: **45 กรัม** | 🥑 ไขมัน: **14 กรัม**\n\nคำแนะนำ: จานนี้สัดส่วนสารอาหารสมดุลดีมาก เหมาะเป็นอาหารฟื้นฟูหลังออกกำลังกายครับ!`,
+          text: `📸 **AI ตรวจวิเคราะห์รูปภาพสำเร็จ!**\n\nตรวจพบ: อาหารจานหลัก (โปรตีนจากเนื้อสัตว์ + คาร์โบไฮเดรตเชิงซ้อน)\n🔥 พลังงานโดยประมาณ: **480 kcal**\n🥩 โปรตีน: **32 กรัม** | 🍞 คาร์บ: **45 กรัม** | 🥑 ไขมัน: **14 กรัม**\n\nต้องการให้โค้ชบันทึกมื้อนี้เลยไหมครับ?`,
           timestamp: new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }),
-          quickReplies: ["บันทึกลงในมื้ออาหารวันนี้", "ปรับแก้ตัวเลข", "ขอบคุณครับ"],
+          quickReplies: ["ยืนยันบันทึกมื้อนี้", "ปรับแก้ตัวเลข", "ขอบคุณครับ"],
         };
         setMessages((prev) => [...prev, aiVisionReply]);
-      }, 1000);
+      }, 800);
     };
     reader.readAsDataURL(file);
   };

@@ -319,23 +319,71 @@ export function buildWorkoutSuccessMessages(options: {
   ];
 }
 
+export function actionButton(options: {
+  label: string;
+  data: string;
+  displayText?: string;
+  style?: "primary" | "secondary" | "danger";
+  color?: string;
+  uri?: string;
+}): Record<string, unknown> {
+  if (options.uri) {
+    return {
+      type: "button",
+      style: options.style === "primary" ? "primary" : "secondary",
+      height: "sm",
+      action: {
+        type: "uri",
+        label: options.label.slice(0, 20),
+        uri: options.uri,
+      },
+    };
+  }
+  return {
+    type: "button",
+    style: options.style === "primary" ? "primary" : "secondary",
+    color: options.color || (options.style === "secondary" ? undefined : COLORS.ink),
+    height: "sm",
+    action: {
+      type: "postback",
+      label: options.label.slice(0, 20),
+      data: options.data.slice(0, 300),
+      displayText: (options.displayText || options.label).slice(0, 300),
+    },
+  };
+}
+
 export function buildWorkoutReminderMessages(options: {
   title?: string;
   focus?: string;
   durationMinutes?: number;
   exerciseCount?: number;
+  exercises?: Array<{ name: string; nameTh?: string; sets?: number | string; reps?: string | number }>;
+  scheduledTime?: string;
+  appUrl?: string;
   overdue?: boolean;
 } = {}): LineMessagePayload[] {
   const title = options.title || "Workout วันนี้";
   const prefix = options.overdue ? "⚠️ เลยเวลาซ้อมแล้วครับ" : "🔔 ถึงเวลาออกกำลังกายแล้วครับ";
   const scheduleText = [
+    options.scheduledTime ? `⏰ ${options.scheduledTime}` : "",
     options.durationMinutes != null ? `${options.durationMinutes} นาที` : "",
     options.focus || "",
     options.exerciseCount ? `${options.exerciseCount} ท่า` : "",
   ].filter(Boolean);
 
-  const button = (label: string, id: string, style: "primary" | "secondary" = "primary") =>
-    safeAction({ id, label, actionType: id === "reminder_snooze" ? "snooze" : id === "reminder_cannot_do" ? "cannot_do" : "start_workout", style });
+  const compactExercises = (options.exercises || []).slice(0, 4).map((e, idx) => ({
+    type: "box",
+    layout: "horizontal",
+    spacing: "sm",
+    contents: [
+      text(`${idx + 1}.`, "xs", "bold", COLORS.green),
+      text(`${e.nameTh || e.name}${e.sets && e.reps ? ` (${e.sets}x${e.reps})` : ""}`, "xs", "regular", COLORS.ink),
+    ],
+  }));
+
+  const appUrl = options.appUrl || process.env.APP_URL || "";
+  const calendarUri = appUrl ? `${appUrl.replace(/\/$/, "")}?tab=plan` : "";
 
   const bubble: LineFlexBubble = {
     type: "bubble",
@@ -347,14 +395,46 @@ export function buildWorkoutReminderMessages(options: {
       paddingAll: "xl",
       spacing: "md",
       contents: [
-        text("เตือน", "sm", "bold", COLORS.amber),
-        text(prefix, "lg", "bold"),
-        text(title, "xl", "bold"),
+        {
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            text(options.overdue ? "⚠️ OVERDUE" : "🏋️ WORKOUT TIME", "xs", "bold", options.overdue ? COLORS.red : COLORS.green),
+            ...(options.scheduledTime ? [text(options.scheduledTime, "xs", "bold", COLORS.muted)] : []),
+          ],
+        },
+        text(title, "xl", "bold", COLORS.ink),
         ...(scheduleText.length
-          ? [{ type: "box", layout: "horizontal", spacing: "sm", contents: scheduleText.slice(0, 3).map((v) => pill(v, COLORS.amberSoft, COLORS.amber)) }]
+          ? [
+              {
+                type: "box",
+                layout: "horizontal",
+                spacing: "sm",
+                contents: scheduleText.slice(0, 3).map((v) => pill(v, COLORS.greenSoft, COLORS.green)),
+              },
+            ]
+          : []),
+        ...(compactExercises.length
+          ? [
+              separator(),
+              text("📋 ท่าซ้อมประจำวัน (ย่อ):", "xs", "bold", COLORS.muted),
+              {
+                type: "box",
+                layout: "vertical",
+                spacing: "xs",
+                contents: compactExercises,
+              },
+            ]
           : []),
         separator(),
-        text(options.overdue ? "ยังไม่ได้บันทึกว่าเสร็จครับ เลือกสิ่งที่ต้องการทำต่อได้เลย" : "พร้อมเริ่มแล้วครับ เลือกการทำงานได้เลย", "sm", "regular", COLORS.muted),
+        text(
+          options.overdue
+            ? "ยังไม่ได้บันทึกผลการซ้อม เลือกรายงานผลให้โค้ชได้เลยครับ"
+            : "พร้อมแล้วกดเริ่มซ้อม หรือรายงานผลให้โค้ชด้านล่างได้เลยครับ 💪",
+          "sm",
+          "regular",
+          COLORS.muted
+        ),
       ],
     },
     footer: {
@@ -364,16 +444,185 @@ export function buildWorkoutReminderMessages(options: {
       paddingAll: "lg",
       spacing: "sm",
       contents: [
-        button("เริ่มฝึก 💪", "reminder_start"),
-        button("เลื่อน 30 นาที", "reminder_snooze", "secondary"),
-        button("ทำไม่ได้วันนี้", "reminder_cannot_do", "secondary"),
+        actionButton({
+          label: "เสร็จแล้ว 💪",
+          data: "action=workout_done",
+          displayText: "เสร็จแล้ว",
+          style: "primary",
+        }),
+        actionButton({
+          label: "เลื่อน ⏰",
+          data: "action=workout_postpone",
+          displayText: "เลื่อน",
+          style: "secondary",
+        }),
+        actionButton({
+          label: "วันนี้ไม่ไหว 🤍",
+          data: "action=workout_cannot_do",
+          displayText: "วันนี้ไม่ไหว",
+          style: "secondary",
+        }),
+        calendarUri
+          ? actionButton({
+              label: "ดูปฏิทิน 📅",
+              data: "action=view_calendar",
+              uri: calendarUri,
+              style: "secondary",
+            })
+          : actionButton({
+              label: "ดูปฏิทิน 📅",
+              data: "action=view_calendar",
+              displayText: "ดูปฏิทิน",
+              style: "secondary",
+            }),
       ],
     },
   };
 
   return [
-    { type: "text", text: `${prefix}\n${title}${options.focus ? ` • ${options.focus}` : ""}` },
+    { type: "text", text: `${prefix}\n🏋️ ${title}${options.scheduledTime ? ` (นัด: ${options.scheduledTime})` : ""}\nเลือกรายงานผลได้จากปุ่มด้านล่างครับ` },
     { type: "flex", altText: `${prefix}: ${title}`, contents: bubble },
+  ];
+}
+
+export function buildRestDayReminderMessages(options: {
+  userName?: string;
+  calories?: number;
+  protein?: number;
+  carbs?: number;
+  fat?: number;
+  notes?: string;
+  appUrl?: string;
+} = {}): LineMessagePayload[] {
+  const name = options.userName || "คุณ";
+  const cal = options.calories || 1800;
+  const pro = options.protein || 120;
+  const carbs = options.carbs || 180;
+  const fat = options.fat || 50;
+  const appUrl = options.appUrl || process.env.APP_URL || "";
+  const calendarUri = appUrl ? `${appUrl.replace(/\/$/, "")}?tab=plan` : "";
+
+  const bubble: LineFlexBubble = {
+    type: "bubble",
+    size: "mega",
+    body: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: COLORS.surface,
+      paddingAll: "xl",
+      spacing: "md",
+      contents: [
+        text("🛌 REST & RECOVERY", "xs", "bold", COLORS.purple),
+        text("วันนี้เป็นวันพักผ่อน", "xl", "bold", COLORS.ink),
+        text("ให้กล้ามเนื้อได้ซ่อมแซมและฟื้นฟูเต็มที่ ไม่มีการซ้อมในวันนี้ครับ", "sm", "regular", COLORS.muted),
+        separator(),
+        text("🎯 เป้าหมายโภชนาการประจำวันพัก:", "sm", "bold", COLORS.ink),
+        {
+          type: "box",
+          layout: "horizontal",
+          spacing: "sm",
+          contents: [
+            pill(`🔥 ${cal.toLocaleString()} kcal`, COLORS.amberSoft, COLORS.amber),
+            pill(`🥩 P: ${pro}g`, COLORS.greenSoft, COLORS.green),
+            pill(`🍚 C: ${carbs}g`, COLORS.blueSoft, COLORS.blue),
+            pill(`🥑 F: ${fat}g`, COLORS.purpleSoft, COLORS.purple),
+          ],
+        },
+        separator(),
+        text(
+          options.notes || "ดื่มน้ำให้เพียงพอ เน้นเดินเบาๆ ยืดเหยียด และคุมอาหารให้ตรงเป้าหมายครับ พักผ่อนให้สบายใจเลยครับ 🌟",
+          "xs",
+          "regular",
+          COLORS.muted
+        ),
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: COLORS.surface,
+      paddingAll: "lg",
+      spacing: "sm",
+      contents: [
+        calendarUri
+          ? actionButton({
+              label: "ดูปฏิทิน 📅",
+              data: "action=view_calendar",
+              uri: calendarUri,
+              style: "secondary",
+            })
+          : actionButton({
+              label: "ดูปฏิทิน 📅",
+              data: "action=view_calendar",
+              displayText: "ดูปฏิทิน",
+              style: "secondary",
+            }),
+      ],
+    },
+  };
+
+  return [
+    { type: "text", text: `🛌 สวัสดีครับคุณ ${name} วันนี้เป็นวันพักผ่อน (Rest Day) ไม่มีซ้อมครับ\n\n🎯 เป้าโภชนาการวันนี้: ${cal} kcal | P: ${pro}g | C: ${carbs}g | F: ${fat}g\nพักผ่อนและเติมสารอาหารให้กล้ามเนื้อฟื้นตัวเต็มที่ครับ 🌟` },
+    { type: "flex", altText: "🛌 วันนี้เป็นวันพักผ่อน (Rest Day)", contents: bubble },
+  ];
+}
+
+export function buildPostponeOptionsMessages(options: {
+  appUrl?: string;
+} = {}): LineMessagePayload[] {
+  const bubble: LineFlexBubble = {
+    type: "bubble",
+    size: "mega",
+    body: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: COLORS.surface,
+      paddingAll: "xl",
+      spacing: "md",
+      contents: [
+        text("⏰ POSTPONE WORKOUT", "xs", "bold", COLORS.amber),
+        text("สะดวกเลื่อนไปเวลาไหนครับ?", "lg", "bold", COLORS.ink),
+        text("เลือกเวลาที่ต้องการให้โค้ชเตือนใหม่ในวันนี้ได้เลย หรือพิมพ์บอกเวลาได้ครับ (เช่น ขอเลื่อนไป 19:30 น.)", "sm", "regular", COLORS.muted),
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: COLORS.surface,
+      paddingAll: "lg",
+      spacing: "sm",
+      contents: [
+        actionButton({
+          label: "+1 ชั่วโมง ⏱️",
+          data: "action=workout_snooze_mins&mins=60",
+          displayText: "ขอเลื่อน 1 ชั่วโมง",
+          style: "primary",
+        }),
+        actionButton({
+          label: "+2 ชั่วโมง ⏱️",
+          data: "action=workout_snooze_mins&mins=120",
+          displayText: "ขอเลื่อน 2 ชั่วโมง",
+          style: "secondary",
+        }),
+        actionButton({
+          label: "ตอนเย็น 19:00 น. 🌇",
+          data: "action=workout_snooze_time&time=19:00",
+          displayText: "ขอเลื่อนเป็น 19:00 น.",
+          style: "secondary",
+        }),
+        actionButton({
+          label: "ตอนค่ำ 20:30 น. 🌙",
+          data: "action=workout_snooze_time&time=20:30",
+          displayText: "ขอเลื่อนเป็น 20:30 น.",
+          style: "secondary",
+        }),
+      ],
+    },
+  };
+
+  return [
+    { type: "text", text: "สะดวกเลื่อนไปเวลาไหนของวันนี้ดีครับ? เลือกเวลาด้านล่างได้เลย หรือพิมพ์บอกเวลาที่สะดวกได้ครับ" },
+    { type: "flex", altText: "⏰ เลื่อนเวลาซ้อมวันนี้", contents: bubble },
   ];
 }
 
