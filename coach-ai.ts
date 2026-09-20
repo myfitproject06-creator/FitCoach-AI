@@ -43,7 +43,7 @@ export interface HistoryItem {
   text: string;
 }
 
-const MODEL = "gemini-2.5-flash";
+const MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash";
 
 function buildSystemInstruction(context: CoachContext): string {
   const profile = context.userProfile;
